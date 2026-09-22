@@ -22,6 +22,17 @@ compact JSON once you're done debugging and want to ship the output. Pass
 `min_feature_size=0` to disable noise filtering entirely (the GUI has a
 checkbox for this too).
 
+For PDFs, only the building itself is kept. Everything else on the sheet is
+removed: the title block (UAA Facilities logo, building name, dates, sheet
+number), the sheet border, crop marks, the scale bar and the north arrow.
+Check the original PDFs for those. The building is found as the largest
+group of nearby shapes inside the sheet's frame, and the page is cropped to
+it with a small margin. That means SVG and JSON coordinates start at the
+top-left corner of the building, not the top-left of the sheet. `plan_area`
+in the JSON gives the crop's position on the original sheet, so you can map
+coordinates back if you need to. If a sheet has no frame, it's exported
+uncropped and the log says so.
+
 DXF entities already carry real layer names and typed geometry (LINE, ARC,
 CIRCLE, LWPOLYLINE, TEXT, block INSERTs...), so a DXF source needs much less
 cleanup than a PDF and generally produces a smaller, more semantic JSON.

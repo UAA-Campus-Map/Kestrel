@@ -143,8 +143,142 @@ def _color(c):
     return [round(v, 3) for v in c] if c else None
 
 
+# Shapes closer than this (in points) are treated as part of the same
+# drawing when separating the building from the sheet's other annotations.
+_GROUP_GAP = 10
+# Whitespace kept around the building when cropping to it.
+_PLAN_MARGIN = 6
+
+
+def _find_sheet_frame(page, drawings):
+    """UAA sheets draw everything except the title block inside a thin
+    stroked frame: the smallest stroked rectangle covering most of the page.
+    If a sheet puts its title block inside the frame instead, it's split off
+    by a full-width horizontal rule in the lower part -- cut there. Returns
+    None if the sheet has no frame."""
+    pr = page.rect
+    frames = [
+        d["rect"] for d in drawings
+        if d.get("color") is not None
+        and d["rect"].width >= pr.width * 0.7
+        and d["rect"].height >= pr.height * 0.5
+        and any(item[0] in ("re", "qu") for item in d["items"])
+    ]
+    if not frames:
+        return None
+    frame = fitz.Rect(min(frames, key=lambda r: r.width * r.height))
+
+    rules = [
+        d["rect"] for d in drawings
+        if d["rect"].width >= frame.width * 0.9
+        and d["rect"].height <= 4
+        and frame.y0 + frame.height * 0.6 <= d["rect"].y0 < frame.y1 - 5
+    ]
+    if rules:
+        frame.y1 = min(r.y0 for r in rules)
+    return frame
+
+
+def _largest_group(rects, gap=_GROUP_GAP, cell=50):
+    """Group rects that lie within `gap` of each other (transitively) and
+    return the bounding box of the group that covers the most area. Uses a
+    coarse grid so only nearby rects are compared."""
+    parent = list(range(len(rects)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    grid = {}
+    for i, r in enumerate(rects):
+        for gx in range(int((r.x0 - gap) // cell), int((r.x1 + gap) // cell) + 1):
+            for gy in range(int((r.y0 - gap) // cell), int((r.y1 + gap) // cell) + 1):
+                grid.setdefault((gx, gy), []).append(i)
+
+    for ids in grid.values():
+        for a, i in enumerate(ids):
+            ra = rects[i]
+            for j in ids[a + 1:]:
+                rb = rects[j]
+                if (ra.x0 - gap <= rb.x1 and rb.x0 - gap <= ra.x1
+                        and ra.y0 - gap <= rb.y1 and rb.y0 - gap <= ra.y1):
+                    parent[root(i)] = root(j)
+
+    groups = {}
+    for i, r in enumerate(rects):
+        g = root(i)
+        groups[g] = groups[g] | r if g in groups else fitz.Rect(r)
+    return max(groups.values(), key=lambda r: r.width * r.height, default=None)
+
+
+def find_plan_area(page):
+    """Return the part of the sheet that holds just the building, or None if
+    no sheet frame is found.
+
+    Inside the sheet frame there's more than the building: a scale bar and a
+    north arrow sit off to the side. Those are separate clusters of shapes,
+    while the building's walls, doors and room labels all sit close together,
+    so the building is the largest cluster inside the frame."""
+    drawings = page.get_drawings()
+    frame = _find_sheet_frame(page, drawings)
+    if frame is None:
+        return None
+
+    rects = [d["rect"] for d in drawings]
+    for block in page.get_text("dict")["blocks"]:
+        rects += [fitz.Rect(line["bbox"]) for line in block.get("lines", [])]
+    # Edge comparisons rather than `in`, since zero-height/width lines have
+    # an empty Rect. Frame-wide lines are the frame itself or its rules.
+    rects = [
+        r for r in rects
+        if frame.x0 <= r.x0 and r.x1 <= frame.x1 and frame.y0 <= r.y0 and r.y1 <= frame.y1
+        and r.width < frame.width * 0.9
+    ]
+
+    building = _largest_group(rects)
+    if building is None:
+        return frame
+    return (building + (-_PLAN_MARGIN, -_PLAN_MARGIN, _PLAN_MARGIN, _PLAN_MARGIN)) & frame
+
+
+def crop_to_plan_area(page):
+    """Strip everything outside the building (title block, sheet border,
+    crop marks, scale bar, north arrow) from the page and crop the page to that area, so
+    both the SVG and the extracted JSON only cover the plan. Coordinates
+    after this are relative to the top-left of the plan area. Returns the
+    area in original page coordinates, or None if the page was left as-is."""
+    area = find_plan_area(page)
+    if area is None:
+        return None
+
+    pr = page.rect
+    outside = [
+        fitz.Rect(pr.x0, pr.y0, pr.x1, area.y0),   # above
+        fitz.Rect(pr.x0, area.y1, pr.x1, pr.y1),   # below (title block)
+        fitz.Rect(pr.x0, pr.y0, area.x0, pr.y1),   # left
+        fitz.Rect(area.x1, pr.y0, pr.x1, pr.y1),   # right
+    ]
+    for r in outside:
+        if not r.is_empty:
+            page.add_redact_annot(r, fill=False)
+    # Removes most of the surrounding vector art and text from the output
+    # (not just hiding it). A few degenerate zero-height paths slip through
+    # redaction; the cropbox below clips those out of the SVG, and
+    # extract_page() filters them out of the JSON.
+    page.apply_redactions(
+        images=fitz.PDF_REDACT_IMAGE_REMOVE,
+        graphics=fitz.PDF_REDACT_LINE_ART_REMOVE_IF_TOUCHED,
+        text=fitz.PDF_REDACT_TEXT_REMOVE,
+    )
+    page.set_cropbox(area)
+    return area
+
+
 def extract_page(page, min_feature_size=MIN_FEATURE_SIZE):
     """Return a dict of text, shapes and page info for one PDF page."""
+    visible = page.rect
     text_lines = []
     for block in page.get_text("dict")["blocks"]:
         for line in block.get("lines", []):
@@ -152,6 +286,8 @@ def extract_page(page, min_feature_size=MIN_FEATURE_SIZE):
             if not text:
                 continue
             x0, y0, x1, y1 = line["bbox"]
+            if not fitz.Rect(line["bbox"]).intersects(visible):
+                continue
             text_lines.append({
                 "text": text,
                 "x": round((x0 + x1) / 2, 2),
@@ -166,6 +302,10 @@ def extract_page(page, min_feature_size=MIN_FEATURE_SIZE):
     dropped = 0
     for d in page.get_drawings():
         r = d["rect"]
+        # Zero-height/width lines have an empty Rect, which never
+        # "intersects" anything, so compare the edges directly.
+        if r.x1 < visible.x0 or r.x0 > visible.x1 or r.y1 < visible.y0 or r.y0 > visible.y1:
+            continue
         bbox = [round(v, 2) for v in (r.x0, r.y0, r.x1, r.y1)]
         has_fill = bool(d.get("fill"))
         if not has_fill and _bbox_diag(bbox) < min_feature_size:
@@ -220,7 +360,11 @@ def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
 
         for i, page in enumerate(doc, start=1):
             stem = f"{pdf_path.stem}-p{i}"
+            plan_area = crop_to_plan_area(page)
             data = extract_page(page, min_feature_size=min_feature_size)
+            # Where the cropped plan sits on the original sheet, so JSON/SVG
+            # coordinates can be mapped back to the PDF if ever needed.
+            data["plan_area"] = [round(v, 2) for v in plan_area] if plan_area else None
             data["source"] = pdf_path.name
             data["page"] = i
             data["format"] = "pdf"
@@ -234,6 +378,8 @@ def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
             written += [json_path, svg_path]
             msg = (f"  page {i}: {data['text_line_count']} text lines, {data['shape_count']} shapes"
                    f" ({data['shapes_filtered']} filtered as noise)")
+            if plan_area is None:
+                msg += "  (no sheet border found, title block not removed)"
             if data["likely_scanned"]:
                 msg += "  (looks scanned: no text layer, will need OCR)"
             elif data["likely_vector_text"]:
