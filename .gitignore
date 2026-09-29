@@ -2,6 +2,3 @@
 
 # Python cache
 __pycache__/
-
-# Extractor output: regenerate with floorplan_extractor.py (~146 MB)
-Data Extraction/Floor Data/
