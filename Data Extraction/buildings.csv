@@ -1,0 +1,84 @@
+code,short,name,section,levels,dxf_levels
+AS101,ESH,Eugene F.Short Hall,Main Campus Buildings,B1;01;02,B1;01;02
+AS102,SMH,Sally Monserud Hall,Main Campus Buildings,B1;01,B1;01
+AS103,BMH,Beatrice McDonald Hall,Main Campus Buildings,B1;01;02,B1;01;02
+AS104,GHH,Gordon Hartlieb Hall,Main Campus Buildings,01;02;03,01;02;03
+AS105,RH,Edward & Cathryn Rasmuson Hall,Main Campus Buildings,01;02;03;04,01;02;03;04
+AS106,CUDY,Lucy Cuddy Hall,Main Campus Buildings,B1;01;02,
+AS107,WB,West Bridge,Main Campus Buildings,01,
+AS108,GRN,Greenhouse,Main Campus Buildings,01,
+AS109,GRS,Greenhouse Storage,Main Campus Buildings,01,
+AS110,ADT,Auto/Diesel Technology Building,Main Campus Buildings,01;02,01;02
+AS111,PSB,Professional Studies Building,Main Campus Buildings,01;02,01;02
+AS112,WWA,Wendy Williamson Auditorium,Main Campus Buildings,B1;01;02;03,B1;01;02;03
+AS114,AHS,Allied Health Sciences Building,Main Campus Buildings,01;02;03,01;02;03
+AS115,EM1,Total Energy Module #1,Main Campus Buildings,01;02,
+AS116,EM2,Total Energy Module #2,Main Campus Buildings,01;02,
+AS117,AASC,Avis Alaska Sports Complex,Main Campus Buildings,01;02;03,01;02;03
+AS118,ESC,Enrollment Service Center,Main Campus Buildings,B1;01;02,B1;01;02
+AS119,SU,Student Union,Main Campus Buildings,01;02,01;02
+AS120,ABL,Arcade and Bridge Lounge,Main Campus Buildings,B1;01;02,B1;01;02
+AS121,ECB,Engineering & Computation Building,Main Campus Buildings,01;02;03,01;02;03;04
+AS122,NSB,Natural Sciences Building,Main Campus Buildings,01;02;Interstitial,01;02;Interstitial
+AS123,SSB,Social Sciences Building,Main Campus Buildings,01;02;03;04,01;02;03;04
+AS124,LIB,Consortium Library,Main Campus Buildings,B1;01;02;03;04,B1;01;02;03;04
+AS125,ADM,Administration/Humanities Building,Main Campus Buildings,01;02;03,01;02;03
+AS126,ADU,Administration Utility Building,Main Campus Buildings,01,
+AS127,ART,Fine Arts Building,Main Campus Buildings,01;02;03,01;02;03
+AS128,SH1,Student Housing Building #1,Main Campus Buildings,01;02;03,01;02;03
+AS129,SH2,Student Housing Building #2,Main Campus Buildings,01;02;03,01;02;03
+AS130,SH3,Student Housing Building #3,Main Campus Buildings,01;02;03,01;02;03
+AS131,SH4,Student Housing Building #4,Main Campus Buildings,01;02;03,01;02;03
+AS132,SH5,Student Housing Building #5,Main Campus Buildings,01;02;03,01;02;03
+AS133,SH6,Student Housing Building #6,Main Campus Buildings,01;02;03,01;02;03
+AS135,TWA,Temple Wood Building A,Main Campus Buildings,01;02;03,01;02;03
+AS136,TWB,Temple Wood Building B,Main Campus Buildings,01;02;03,01;02;03
+AS137,TWC,Temple Wood Building C,Main Campus Buildings,01;02;03,01;02;03
+AS138,TWD,Temple Wood Building D,Main Campus Buildings,01;02;03,01;02;03
+AS139,TWE,Temple Wood Building E,Main Campus Buildings,01;02;03,01;02;03
+AS140,TWF,Temple Wood Building F,Main Campus Buildings,01;02;03,01;02;03
+AS141,CMMNS,Commons,Main Campus Buildings,01;02,01;02
+AS142,EASTH,East Hall Student Housing,Main Campus Buildings,01;02;03;04;05,01;02;03;04;05
+AS143,WESTH,West Hall Student Housing,Main Campus Buildings,01;02;03;04;05,01;02;03;04;05
+AS144,NORTHH,North Hall Student Housing,Main Campus Buildings,01;02;03;04;05,01;02;03;04;05
+AS145,GAO,Grounds Administration Office,Main Campus Buildings,01,
+AS146,GSO,Grounds Staff Office,Main Campus Buildings,01,
+AS147,GES,Grounds Equipment Shed,Main Campus Buildings,01,
+AS148,GIE,Grounds Irrigation Equipment Shed,Main Campus Buildings,01,
+AS149,CSS,Custodial Storage Shed,Main Campus Buildings,01,
+AS150,CPG,Central Parking Garage,Main Campus Buildings,01;02;03;04,01;02;03;04
+AS151,EBL,Ecosystem-Biomedical Health Laboratory,Main Campus Buildings,01;02,01;02
+AS153,ANSEP,Alaska Native Science and Engineering Programs Building,Main Campus Buildings,01;02,01;02
+AS154,CPISB,ConocoPhillips Integrated Science Building,Main Campus Buildings,01;02;03;04,01;02;03;04;Interstitial
+AS155,EPG,East Parking Garage,Main Campus Buildings,01;02;03,01;02;03
+AS156,HSB,Health Sciences Building,Main Campus Buildings,01;02;03;04,01;02;03;04
+AS157,AAC,Alaska Airlines Center,Main Campus Buildings,B1;01;02;03;04;05,B1;01;02;03;04;05
+AS158,AAB,ANSEP Academy Building,Main Campus Buildings,01,01
+AS159,HMB,EBL Hazardous Material Storage,Main Campus Buildings,01,
+AS160,ETB1,Engineering Temporary Building #1,Main Campus Buildings,01,01
+AS161,ETB2,Engineering Temporary Building #2,Main Campus Buildings,01,01
+AS162,EIB,Engineering & Industry Building,Main Campus Buildings,01;02;03;04,01;02;03;04
+AS163,ENPG,Engineering Parking Garage,Main Campus Buildings,01;02;03;04,01;02;03;04
+AS164,PB,Parrish Bridge,Main Campus Buildings,03,03
+AS165,IP1,Ice Plant 1,Main Campus Buildings,01,
+AS166,WMB,Winter Maintenance Building,Main Campus Buildings,01,
+AO101,AVC,Aviation Technology Complex,Off-Campus Buildings,01;02;03,
+AO102,AVS,Aviation Storage Building,Off-Campus Buildings,01,
+AO106,ULB,University Lake Building,Off-Campus Buildings,01,
+AO107,ULA,University Lake Annex,Off-Campus Buildings,01,
+AO108,UC,University Center,Off-Campus Buildings,01;02,
+AO109,TRB,Transportation Research Building,Off-Campus Buildings,01,
+AO110,,State Fairgrounds Cabin,Off-Campus Buildings,01,
+AO111,BOC3,1901 Bragaw Office Complex #3,Off-Campus Buildings,B1;01;02;03;04,
+AO112,GLT,Goose Lake Townhomes,Off-Campus Buildings,,
+AO113,KBAY,Kachemak Bay National Estuarine Research Center,Off-Campus Buildings,,
+AO114,TBA,TBA,Off-Campus Buildings,,
+AO115,WCC,Widgeon Court Condominiums,Off-Campus Buildings,01;02;03,
+AL121,,SBDC - Matsu,Anchorage Lease Space,02,
+AL124,,Gambell Professional Building,Anchorage Lease Space,01;02,
+AL127,,SBDC - Soldotna,Anchorage Lease Space,,
+AL129,,UC Warehouse,Anchorage Lease Space,01;02,
+AL139,,SBDC – Fairbanks,Anchorage Lease Space,,
+AL143,,SBDC – Ketchikan,Anchorage Lease Space,,
+AL144,,SBDC - Juneau,Anchorage Lease Space,,
+SW914,BOC1,1815 Bragaw Office Complex #1,Others,01;02,
