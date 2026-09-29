@@ -9,6 +9,18 @@ DXF. For every page/layout you get:
     <name>-p<N>.json   text labels + vector shapes with coordinates
     <name>.svg / .json (DXF: single modelspace layout, no page suffix)
 
+Every JSON starts with the building it belongs to, looked up from the file
+name (`<code>-<level>`, e.g. `AS101-01`) in the `BUILDINGS` table at the top
+of `floorplan_extractor.py`:
+
+    "building_code": "AS101", "ID": "ESH",
+    "building_name": "Eugene Short Hall", "level": "01"
+
+The table comes from UAA's official list at
+http://fpgis.uaa.alaska.edu/FPTableANC.htm. Edit it there if a name changes
+or a building is added. A code missing from the table still gets
+`building_code` and `level`, with `ID` and `building_name` set to null.
+
 Vector geometry is cleaned up before it's written: hatch/dash fragments below
 `MIN_FEATURE_SIZE` are dropped, and connected line segments are merged into
 polylines. That alone cuts typical output size by ~80% versus a raw 1:1 dump

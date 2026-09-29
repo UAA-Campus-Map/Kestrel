@@ -31,6 +31,110 @@ SUPPORTED_SUFFIXES = {".pdf", ".dxf"}
 # regardless of where you launch the script from.
 DEFAULT_OUT_DIR = Path(__file__).resolve().parent / "Floor Data"
 
+# UAA facility code -> (ID, building name), from the official Anchorage
+# floor plan list at http://fpgis.uaa.alaska.edu/FPTableANC.htm. Source files
+# are named <code>-<level> (AS101-01.dxf is Eugene Short Hall, floor 1), so
+# every JSON gets its building's name and ID from this table. Codes marked
+# "No Longer Used" on that page are left out.
+BUILDINGS = {
+    # Main Campus Buildings
+    "AS101": ("ESH", "Eugene Short Hall"),
+    "AS102": ("SMH", "Sally Monserud Hall"),
+    "AS103": ("BMH", "Beatrice McDonald Hall"),
+    "AS104": ("GHH", "Gordon Hartlieb Hall"),
+    "AS105": ("RH", "Edward & Cathryn Rasmuson Hall"),
+    "AS106": ("CUDY", "Lucy Cuddy Hall"),
+    "AS107": ("WB", "West Bridge"),
+    "AS108": ("GRN", "Greenhouse"),
+    "AS109": ("GRS", "Greenhouse Storage"),
+    "AS110": ("ADT", "Auto/Diesel Technology Building"),
+    "AS111": ("PSB", "Professional Studies Building"),
+    "AS112": ("WWA", "Wendy Williamson Auditorium"),
+    "AS114": ("AHS", "Allied Health Sciences Building"),
+    "AS115": ("EM1", "Total Energy Module #1"),
+    "AS116": ("EM2", "Total Energy Module #2"),
+    "AS117": ("AASC", "Avis Alaska Sports Complex"),
+    "AS118": ("ESC", "Enrollment Service Center"),
+    "AS119": ("SU", "Student Union"),
+    "AS120": ("ABL", "Arcade and Bridge Lounge"),
+    "AS121": ("ECB", "Engineering & Computation Building"),
+    "AS122": ("NSB", "Natural Sciences Building"),
+    "AS123": ("SSB", "Social Sciences Building"),
+    "AS124": ("LIB", "Consortium Library"),
+    "AS125": ("ADM", "Administration/Humanities Building"),
+    "AS126": ("ADU", "Administration Utility Building"),
+    "AS127": ("ART", "Fine Arts Building"),
+    "AS128": ("SH1", "Student Housing Building #1"),
+    "AS129": ("SH2", "Student Housing Building #2"),
+    "AS130": ("SH3", "Student Housing Building #3"),
+    "AS131": ("SH4", "Student Housing Building #4"),
+    "AS132": ("SH5", "Student Housing Building #5"),
+    "AS133": ("SH6", "Student Housing Building #6"),
+    "AS135": ("TWA", "Temple Wood Building A"),
+    "AS136": ("TWB", "Temple Wood Building B"),
+    "AS137": ("TWC", "Temple Wood Building C"),
+    "AS138": ("TWD", "Temple Wood Building D"),
+    "AS139": ("TWE", "Temple Wood Building E"),
+    "AS140": ("TWF", "Temple Wood Building F"),
+    "AS141": ("CMMNS", "Commons"),
+    "AS142": ("EASTH", "East Hall Student Housing"),
+    "AS143": ("WESTH", "West Hall Student Housing"),
+    "AS144": ("NORTHH", "North Hall Student Housing"),
+    "AS145": ("GAO", "Grounds Administration Office"),
+    "AS146": ("GSO", "Grounds Staff Office"),
+    "AS147": ("GES", "Grounds Equipment Shed"),
+    "AS148": ("GIE", "Grounds Irrigation Equipment Shed"),
+    "AS149": ("CSS", "Custodial Storage Shed"),
+    "AS150": ("CPG", "Central Parking Garage"),
+    "AS151": ("EBL", "Ecosystem-Biomedical Health Laboratory"),
+    "AS153": ("ANSEP", "Alaska Native Science and Engineering Programs Building"),
+    "AS154": ("CPISB", "ConocoPhillips Integrated Science Building"),
+    "AS155": ("EPG", "East Parking Garage"),
+    "AS156": ("HSB", "Health Sciences Building"),
+    "AS157": ("AAC", "Alaska Airlines Center"),
+    "AS158": ("AAB", "ANSEP Academy Building"),
+    "AS159": ("HMB", "EBL Hazardous Material Storage"),
+    "AS160": ("ETB1", "Engineering Temporary Building #1"),
+    "AS161": ("ETB2", "Engineering Temporary Building #2"),
+    "AS162": ("EIB", "Engineering & Industry Building"),
+    "AS163": ("ENPG", "Engineering Parking Garage"),
+    "AS164": ("PB", "Parrish Bridge"),
+    "AS165": ("IP1", "Ice Plant 1"),
+    "AS166": ("WMB", "Winter Maintenance Building"),
+    # Off-Campus Buildings
+    "AO101": ("AVC", "Aviation Technology Complex"),
+    "AO102": ("AVS", "Aviation Storage Building"),
+    "AO106": ("ULB", "University Lake Building"),
+    "AO107": ("ULA", "University Lake Annex"),
+    "AO108": ("UC", "University Center"),
+    "AO109": ("TRB", "Transportation Research Building"),
+    "AO110": (None, "State Fairgrounds Cabin"),
+    "AO111": ("BOC3", "1901 Bragaw Office Complex #3"),
+    "AO112": ("GLT", "Goose Lake Townhomes"),
+    "AO113": ("KBAY", "Kachemak Bay National Estuarine Research Center"),
+    "AO114": ("TBA", "TBA"),
+    "AO115": ("WCC", "Widgeon Court Condominiums"),
+    # Anchorage Lease Space
+    "AL121": (None, "SBDC - Matsu"),
+    "AL124": (None, "Gambell Professional Building"),
+    "AL127": (None, "SBDC - Soldotna"),
+    "AL129": (None, "UC Warehouse"),
+    "AL139": (None, "SBDC - Fairbanks"),
+    "AL143": (None, "SBDC - Ketchikan"),
+    "AL144": (None, "SBDC - Juneau"),
+    # Others
+    "SW914": ("BOC1", "1815 Bragaw Office Complex #1"),
+}
+
+
+def building_info(stem):
+    """Return the building fields for a source file stem like 'AS101-01'.
+    Unknown codes still get building_code/level, with ID and name None."""
+    code, _, level = stem.partition("-")
+    code = code.upper()
+    building_id, name = BUILDINGS.get(code, (None, None))
+    return {"building_code": code, "ID": building_id, "building_name": name, "level": level or None}
+
 
 # ---------------------------------------------------------------------------
 # shared helpers
@@ -361,7 +465,7 @@ def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
         for i, page in enumerate(doc, start=1):
             stem = f"{pdf_path.stem}-p{i}"
             plan_area = crop_to_plan_area(page)
-            data = extract_page(page, min_feature_size=min_feature_size)
+            data = {**building_info(pdf_path.stem), **extract_page(page, min_feature_size=min_feature_size)}
             # Where the cropped plan sits on the original sheet, so JSON/SVG
             # coordinates can be mapped back to the PDF if ever needed.
             data["plan_area"] = [round(v, 2) for v in plan_area] if plan_area else None
@@ -603,7 +707,7 @@ def process_dxf(dxf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
         return written
 
     msp = doc.modelspace()
-    data = extract_dxf_layout(doc, msp, min_feature_size=min_feature_size)
+    data = {**building_info(dxf_path.stem), **extract_dxf_layout(doc, msp, min_feature_size=min_feature_size)}
     data["source"] = dxf_path.name
     data["page"] = 1
     data["format"] = "dxf"

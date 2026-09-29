@@ -3,11 +3,11 @@
 Hosting: navigator.cheeseverse.net · Frontend: plain HTML/JS first, React later
 
 ## 0. Data sources
-- [x] Building registry `Data Extraction/buildings.csv` (from http://fpgis.uaa.alaska.edu/FPTableANC.htm)
+- [x] Building registry: `BUILDINGS` table in `floorplan_extractor.py` (from http://fpgis.uaa.alaska.edu/FPTableANC.htm). Every floor JSON gets `building_code`, `ID`, `building_name`, `level`
+- [x] Run the extractor on all DXFs → `Floor Data/`
 - [ ] Get DXFs for main-campus buildings that are missing them, starting with AS106 Lucy Cuddy Hall (LCH, in the prototype). Also missing: AS107, AS108, AS109, AS115, AS116, AS126, AS145–AS149, AS159, AS165, AS166
 - [ ] Check DXF floors the UAA site doesn't list: AS121 floor `04`, AS154 `Interstitial`
-- [ ] Optional: turn the one-off `buildings.csv` generator into a script so it can be rerun
-- [ ] Add an `aliases` column to `buildings.csv` for common nicknames (e.g. "Eugene Short", "Library")
+- [ ] Add aliases to the `BUILDINGS` table for common nicknames (e.g. "Eugene Short", "Library")
 
 ## 1. Georeferencing (CAD coordinates → lon/lat)
 - [ ] Define the `georef/<code>-<level>.json` format: ≥3 control points (CAD x,y ↔ lon,lat)
@@ -23,7 +23,7 @@ Hosting: navigator.cheeseverse.net · Frontend: plain HTML/JS first, React later
 - [ ] Turn room label text into label points
 - [ ] Build room polygons with Shapely `polygonize` (walls + door openings), pair each with its label, and log rooms that can't be matched
 - [ ] Handle special levels (`Interstitial`)
-- [ ] Generate `data/campus.json` from `buildings.csv` plus the exported floors
+- [ ] Generate `data/campus.json` from the building fields in the exported floor JSONs
 - [ ] Batch mode: process every DXF, skipping floors without a georef file and reporting them
 - [ ] pytest tests for the transform and the level parsing
 
@@ -44,7 +44,7 @@ Hosting: navigator.cheeseverse.net · Frontend: plain HTML/JS first, React later
 - [ ] Move the authoring tools (Add Rooms, Define Walkable, Upload Floor Plan) to a separate admin page
 
 ## 5. Prototype bugs to fix
-- [ ] Room search crashes on unknown or malformed input; also support short codes and aliases from `buildings.csv`
+- [ ] Room search crashes on unknown or malformed input; also support building IDs and aliases
 - [ ] Compass: `DeviceOrientationEvent.requestPermission()` only exists on iOS, so on Android and desktop it throws and the compass listener is never attached
 - [ ] `index.html` uses absolute paths (`/pathfinder.js`), so it needs a web server; document how to run it locally
 
