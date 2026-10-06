@@ -13,11 +13,28 @@ Hosting: navigator.cheeseverse.net · Frontend: plain HTML/JS first, React later
 **Next step:** Data sources are done for every public building, so start Georeferencing with AS101 (section 1).
 
 ## 1. Georeferencing (CAD coordinates → lon/lat)
-- [ ] Define the `georef/<code>-<level>.json` format: ≥3 control points (CAD x,y ↔ lon,lat)
-- [ ] Fit a similarity/affine transform by least squares in UTM 6N (EPSG:32606) using `pyproj`, and report RMS error in meters
-- [ ] Georeference AS101 (Eugene Short Hall), floors B1, 01 and 02. Each floor has its own CAD origin, so align upper floors using the stair and elevator shafts
-- [ ] Validate AS101 against the 63 hand-placed `esh` rooms in the prototype (distance in meters for each room)
-- [ ] Build a control-point picker tool on an admin page (reuse the prototype's drag-corner idea)
+Approach: start with one building (AS101-01), measure its accuracy, write down the procedure, then repeat it for the others. Each floor has a hand-editable `Data Extraction/georef/<code>-<level>.json` (control points with a `source`, plus field `checks`), and `georef.py` refits from it, so the team can correct coordinates with data collected on campus.
+
+Notes: CAD units are inches (door arcs are 36), but the `$INSUNITS` header is unreliable, so the fit checks the scale (≈0.0254 m/unit). The north arrow was stripped and each floor has its own CAD origin, so there's one transform per floor and rotation comes from the fit.
+
+**Phase A: AS101-01 accuracy test**
+- [x] Define the georef JSON format (plus optional `scale_m_per_unit` to lock the scale): `control_points` (`name`, `cad`, `lonlat`, `source`: prototype / map-pick / field-gps / survey, `note`, `use`), `checks` (two CAD points + a tape-measured distance), and a generated `fit` block
+- [x] `georef.py init <floor> --from-prototype <name>`: seed control points by matching prototype room names to the floor's `text_lines`, and list the names that don't match
+- [x] `georef.py fit <floor>`: least-squares similarity fit (numpy, local east/north plane in meters). Report the residual per point, RMS, scale vs 0.0254, and each check. Flag points over 3× the median residual instead of dropping them
+- [x] `georef.py preview <floor>`: write walls, doors and labels in lon/lat as GeoJSON to look at on a map
+- [x] pytest (`test_georef.py`, 6 tests): a synthetic transform is recovered, a locked scale still recovers the rotation, an outlier gets flagged, and lon/lat → plane → lon/lat round-trips
+- [x] Run on AS101-01 with the `esh` prototype rooms (61 used; one of the prototype's two `100U3` rooms was 15.7 m off). A free fit gives a scale 6% too large, but the OSM footprint confirms inches, so the scale is locked at 0.0254. Walls land within 0.1–1.2 m of the OSM outline on three sides
+- [x] Holdout test: **median 1.48 m, 90th percentile 2.37 m** with the scale locked. This is limited by the prototype points
+- [ ] **Next: field data for ESH.** 1–2 tape-measured long distances (a corridor or exterior wall, as `checks`) to confirm the inch scale, and 3–4 building corners (`field-gps`), then refit and compare against the numbers above
+
+**Phase B: repeatable process**
+- [x] `Data Extraction/georef/README.md`: the procedure for one floor (init → fit → review flagged points → preview → add field data → refit), how to collect field points and what accuracy to expect from each `source`, with AS101-01 results as the reference
+
+**Phase C: scale out (after Phase A looks good)**
+- [ ] AS101 B1 and 02: stack them onto 01 using shaft labels that repeat across floors (`100S1`/`200S1`, `100V1`/`200V1`), falling back to manual points
+- [ ] Seed the other 10 prototype buildings (bmh, lch→AS106, rh, aasc, su, ecb, esc, smh, ahs, nsb) and stack their floors
+- [ ] Control-point picker admin page for buildings with no prototype data, writing the same JSON with `source: "map-pick"`
+- [ ] `georef.py report`: status, point count, RMS and scale for every floor
 
 ## 2. GeoJSON export (`Data Extraction/geo_export.py`)
 - [ ] Output schema modeled on IMDF: properties `building`, `level` (B1=-1, 01=1, ...), `category`

@@ -5,3 +5,6 @@ Oropendula/
 # Word documents and their LibreOffice lock files
 *.docx
 .~lock.*#
+
+# Generated georef previews (python georef.py preview <floor>)
+Data Extraction/georef/preview/
