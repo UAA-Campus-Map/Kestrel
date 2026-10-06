@@ -5,9 +5,12 @@ Hosting: navigator.cheeseverse.net · Frontend: plain HTML/JS first, React later
 ## 0. Data sources
 - [x] Building registry: `BUILDINGS` table in `floorplan_extractor.py` (from http://fpgis.uaa.alaska.edu/FPTableANC.htm). Every floor JSON gets `building_code`, `ID`, `building_name`, `level`
 - [x] Run the extractor on all DXFs → `Floor Data/`
-- [ ] Get DXFs for main-campus buildings that are missing them, starting with AS106 Lucy Cuddy Hall (LCH, in the prototype). Also missing: AS107, AS108, AS109, AS115, AS116, AS126, AS145–AS149, AS159, AS165, AS166
-- [ ] Check DXF floors the UAA site doesn't list: AS121 floor `04`, AS154 `Interstitial`
-- [ ] Add aliases to the `BUILDINGS` table for common nicknames (e.g. "Eugene Short", "Library")
+- [x] Get DXFs for main-campus buildings that are missing them. AS106 Lucy Cuddy Hall added and extracted (B1, 01, 02 → `Floor Data/AS106-*`). B1 and 02 are small partial levels (mechanical/roof), 01 has the rooms
+- [x] Compare the remaining missing codes against the UAA site: they're maintenance-only, not public walking space, so no DXF is needed. Notes in `maintainance.md`. AS107 West Bridge is tracked under Navigation
+- [x] Check DXF floors the UAA site doesn't list: AS121 floor `04` and AS154 `Interstitial` are maintenance spaces, not public walking space (see `maintainance.md`)
+- [x] Verify every floor JSON has its UAA identifier: all 156 JSONs (49 buildings) have `ID` and `building_name`, and every `ID` matches the UAA Identifier column on the UAA site
+
+**Next step:** Data sources are done for every public building, so start Georeferencing with AS101 (section 1).
 
 ## 1. Georeferencing (CAD coordinates → lon/lat)
 - [ ] Define the `georef/<code>-<level>.json` format: ≥3 control points (CAD x,y ↔ lon,lat)
@@ -44,13 +47,17 @@ Hosting: navigator.cheeseverse.net · Frontend: plain HTML/JS first, React later
 - [ ] Move the authoring tools (Add Rooms, Define Walkable, Upload Floor Plan) to a separate admin page
 
 ## 5. Prototype bugs to fix
-- [ ] Room search crashes on unknown or malformed input; also support building IDs and aliases
+- [ ] Room search crashes on unknown or malformed input; also support searching by UAA building ID (e.g. `ESH`, `CUDY`)
 - [ ] Compass: `DeviceOrientationEvent.requestPermission()` only exists on iOS, so on Android and desktop it throws and the compass listener is never attached
 - [ ] `index.html` uses absolute paths (`/pathfinder.js`), so it needs a web server; document how to run it locally
 
 ## 6. Navigation (next phase)
 - [ ] Reserve a `nav` layer in the data format: nodes and edges with `level`, plus connectors (stairs, elevators, entrances)
 - [ ] Generate the walkable graph from doors and room polygons instead of clicking it by hand
+- [ ] Model enclosed bridges as connector edges between buildings, so routes can stay indoors. No floor plan needed: record the two doors each bridge links, the floors they're on, and its length
+  - AS107 West Bridge: 2nd-floor connection, no DXF (not needed for display)
+  - AS164 Parrish Bridge: 3rd floor, DXF available
+  - AS120 Arcade and Bridge Lounge: check whether it links buildings
 - [ ] Snap segment endpoints so the graph is connected (hand-drawn `bmhroutes`/`smhroutes` segments don't share endpoints)
 - [ ] Replace `pathfinder.js`:
   - `nodes` is never declared (`// nodes = [];`)

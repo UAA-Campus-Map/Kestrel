@@ -1,4 +1,7 @@
 .claude/
-
-# Python cache
 __pycache__/
+Oropendula/
+
+# Word documents and their LibreOffice lock files
+*.docx
+.~lock.*#

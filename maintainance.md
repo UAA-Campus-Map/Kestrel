@@ -1,0 +1,14 @@
+- AS115: Total Energy Module #1
+- AS116: Total Energy Module #2
+- AS108:  Greenhouse
+- AS109:  Greenhouse storage
+- AS126: Administration Utility Building
+- AS145:  Grounds Administration Office
+- AS146:  Grounds Staff Office
+- AS147:  Grounds Equipment Shed
+- AS148:  Grounds Irrigation Equipment Shed
+- AS149:  Custodial Storage Shed
+- AS159: EBL Hazardous Material Storage
+- AS165: Ice Plant 1
+- AS121: 4th floor of ECB0
+- AS154: Interstitial crowding space for maintainance
