@@ -1,3 +1,4 @@
 [submodule "Oropendula"]
 	path = Oropendula
 	url = https://github.com/UAA-Campus-Map/Oropendula.git
+	branch = main
