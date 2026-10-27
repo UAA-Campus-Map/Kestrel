@@ -1,0 +1,70 @@
+// EXAMPLE ONLY: a commented copy of a georef file, to show where each kind of
+// edit goes. georef.py never reads this file (it only opens <code>-<level>.json),
+// and real .json files can't contain comments, so don't paste the // lines in.
+//
+// The values below use AS101-01 (Eugene Short Hall, floor 1). The lon/lat of
+// the "field-gps" corner and the measured distance are MADE UP: replace them
+// with what you actually record on campus.
+//
+// After any edit:   python georef.py fit AS101-01 --holdout
+{
+  "building_code": "AS101",
+  "ID": "ESH",
+  "building_name": "Eugene Short Hall",
+  "level": "01",
+  "scale_m_per_unit": 0.0254,
+  "scale_note": "Locked to inches ...",
+
+  "control_points": [
+    // ---------------------------------------------------------------------
+    // 1) A normal point from init. Leave these alone unless one is wrong.
+    // ---------------------------------------------------------------------
+    {"name": "102B", "cad": [3196.13, 1132.96], "lonlat": [-149.8324447039924, 61.188788441371514], "source": "prototype", "note": "room label insert point", "use": true},
+
+    // ---------------------------------------------------------------------
+    // 2) TURNING A POINT OFF: change "use" to false and write the reason in
+    //    "note". Don't delete the line, so the team can see why it was dropped.
+    //    "use" is its own field; it does NOT go inside "note".
+    // ---------------------------------------------------------------------
+    {"name": "100U3", "cad": [4325.78, 736.08], "lonlat": [-149.83204525090326, 61.188797920701205], "source": "prototype", "note": "prototype has two 100U3 rooms; this one is 15.7 m from the CAD label", "use": false},
+
+    // ---------------------------------------------------------------------
+    // 3) ADDING A FIELD POINT: a building corner you stood at with a GPS app.
+    //    Add it at the end of the list (mind the comma on the line above).
+    //
+    //    "cad":    the same corner in the floor plan, in CAD inches. Find it in
+    //              Floor Data/AS101-01.json: WALLS-layer shapes, "points" in
+    //              each item. For ESH floor 1 the outer wall corners are about
+    //                NW [2929.14, 1205.27]   NE [4920.14, 1207.27]
+    //                SW [2929.14,  489.27]   SE [4920.14,  491.27]
+    //              (+y is north in the drawing). Or open Floor Data/AS101-01.svg.
+    //    "lonlat": [longitude, latitude], in that order. Longitude comes first
+    //              and is negative in Alaska (-149.83...). Google Maps shows
+    //              "61.18, -149.83" (lat first), so swap them.
+    //    "source": "field-gps" (phone/GPS), "map-pick" (clicked on satellite
+    //              imagery), or "survey" (survey-grade / campus GIS).
+    //    "note":   how you got it and the accuracy, e.g. averaged readings.
+    // ---------------------------------------------------------------------
+    {"name": "NW corner", "cad": [2929.14, 1205.27], "lonlat": [-149.8325542, 61.1887859], "source": "field-gps", "note": "EXAMPLE VALUES - average of 5 phone readings, +-3 m, 2026-10-20", "use": true}
+  ],
+
+  "checks": [
+    // ---------------------------------------------------------------------
+    // 4) ADDING A TAPE MEASUREMENT: a long straight distance you measured on
+    //    campus. No GPS needed; this tests whether the inch scale is right.
+    //
+    //    "cad_a", "cad_b": the two ends in CAD inches (same way as "cad" above).
+    //    "measured_m":     what the tape/laser said, in meters (feet x 0.3048).
+    //    Measure outside along the wall, or a long corridor wall-to-wall.
+    //    The longer the distance, the better the test.
+    //
+    //    fit then prints e.g. "check 'north exterior wall': measured 50.5 m,
+    //    plan 50.57 m, diff +0.07 m". A diff of a few cm is a good sign; a
+    //    diff of meters means the scale or the CAD points are wrong.
+    // ---------------------------------------------------------------------
+    {"what": "north exterior wall, NW to NE corner", "cad_a": [2929.14, 1205.27], "cad_b": [4920.14, 1207.27], "measured_m": 50.5, "source": "tape", "note": "EXAMPLE VALUE - 165 ft 8 in, laser measure"}
+  ],
+
+  // 5) "fit" is written by `python georef.py fit`. Don't edit it by hand.
+  "fit": { "...": "generated" }
+}

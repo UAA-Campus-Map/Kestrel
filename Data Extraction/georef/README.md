@@ -14,6 +14,9 @@ collects better data on campus, edit the file and run `fit` again.
 
 ## File format: `<code>-<level>.json`
 
+See [`EXAMPLE.jsonc`](EXAMPLE.jsonc) for a commented example of each edit:
+adding a field point, adding a tape-measured check, and turning a point off.
+
 | Field | Who writes it | What it is |
 |---|---|---|
 | `building_code`, `ID`, `building_name`, `level` | `init` | Same as the floor JSON |
@@ -37,7 +40,9 @@ To turn a point off without deleting it, set `"use": false` and say why in
 
 ## Procedure for one floor
 
-1. **Extract** the floor if it isn't done yet: `python floorplan_extractor.py "Floor Plans/DXFs/AS101-01.dxf" -o "Floor Data"`
+Run `georef.py` and its tests from this folder (`Data Extraction/georef/`). It finds `floorplan_extractor.py` and `Floor Data/` one folder up on its own.
+
+1. **Extract** the floor if it isn't done yet, from `Data Extraction/`: `python floorplan_extractor.py "Floor Plans/DXFs/AS101-01.dxf" -o "Floor Data"`
 2. **Init** the georef file:
    - `python georef.py init AS101-01 --from-prototype esh` if the prototype has rooms for this building. The prototype's building names are `bmh`, `lch` (AS106), `rh`, `aasc`, `su`, `ecb`, `esc`, `smh`, `esh`, `ahs`, `nsb`.
    - `python georef.py init AS101-01` otherwise, then add at least 3 points by hand. Building corners spread far apart work best.
@@ -47,9 +52,9 @@ To turn a point off without deleting it, set `"use": false` and say why in
    - **RMS** is how far the points are from the fit. **Holdout** is the error on points left out of the fit, so it's the accuracy to report.
    - **scale vs inches** should be close to 0%. If a free fit gives several percent, the control points are stretched (prototype points are), so check against an independent source and lock the scale with `"scale_m_per_unit": 0.0254`.
    - **FLAGGED** points are more than 3× the median error (and over 1 m). Find out why, then fix the point or set `"use": false`. Don't just delete them.
-4. **Preview**: `python georef.py preview AS101-01`, then drag `georef/preview/AS101-01.geojson` onto https://geojson.io (satellite view). The walls should sit on the building with the right orientation. Green dots are control points, red are flagged ones, gray are turned off.
+4. **Preview**: `python georef.py preview AS101-01`, then drag `preview/AS101-01.geojson` onto https://geojson.io (satellite view). The walls should sit on the building with the right orientation. Green dots are control points, red are flagged ones, gray are turned off.
 5. **Add field data** when you can, then refit:
-   - **Distances (`checks`):** tape- or laser-measure a long straight distance, like a corridor or an exterior wall. Use the room labels or wall corners in `Floor Data/<floor>.json` to get the two CAD points. These test the scale without any GPS.
+   - **Distances (`checks`):** tape- or laser-measure a long straight distance, like a corridor or an exterior wall. Use the room labels or wall corners in `../Floor Data/<floor>.json` to get the two CAD points. These test the scale without any GPS.
    - **Points (`control_points`):** stand at a building corner and record its lon/lat (average a few readings). Give it `source: "field-gps"` and the accuracy in `note`. Find the same corner's CAD x, y in the floor JSON or the SVG.
 6. Commit the georef JSON. The preview folder is generated and isn't tracked.
 

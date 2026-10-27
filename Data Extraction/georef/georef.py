@@ -1,6 +1,6 @@
 """Georeference extracted floor plans: CAD x,y -> lon/lat.
 
-Each floor has a hand-editable file georef/<code>-<level>.json that holds its
+Each floor has a hand-editable file <code>-<level>.json in this folder that holds its
 control points (a CAD point and the lon/lat it belongs at) and optional field
 checks (a distance measured on campus between two CAD points). This script
 fits a similarity transform (scale + rotation + offset) to the points and
@@ -11,7 +11,7 @@ points (add field data, set "use": false on a bad one) and run fit again.
     python georef.py fit AS101-01 [--holdout]
     python georef.py preview AS101-01
 
-See georef/README.md for the full procedure.
+Run from this folder (Data Extraction/georef). See README.md for the full procedure.
 """
 
 import argparse
@@ -21,12 +21,16 @@ from pathlib import Path
 
 import numpy as np
 
-from floorplan_extractor import DEFAULT_OUT_DIR, building_info
+HERE = Path(__file__).resolve().parent          # Data Extraction/georef
+EXTRACTION_DIR = HERE.parent                    # Data Extraction
+sys.path.insert(0, str(EXTRACTION_DIR))         # for floorplan_extractor
 
-HERE = Path(__file__).resolve().parent
-GEOREF_DIR = HERE / "georef"
+# pylint: disable-next=wrong-import-position
+from floorplan_extractor import DEFAULT_OUT_DIR, building_info  # noqa: E402
+
+GEOREF_DIR = HERE
 PREVIEW_DIR = GEOREF_DIR / "preview"
-PROTOTYPE_HTML = HERE.parent / "Oropendula" / "src" / "index.html"
+PROTOTYPE_HTML = EXTRACTION_DIR.parent / "Oropendula" / "src" / "index.html"
 
 INCH_M = 0.0254         # DXFs are drawn in inches (36-unit door swings)
 FLAG_FACTOR = 3.0       # flag residuals above this many times the median...
@@ -365,7 +369,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("init", help="create georef/<floor>.json")
+    p = sub.add_parser("init", help="create <floor>.json in this folder")
     p.add_argument("floor", help="e.g. AS101-01")
     p.add_argument("--from-prototype", metavar="NAME", help="seed points from a prototype building, e.g. esh")
     p.add_argument("--prototype", default=PROTOTYPE_HTML, help="path to the prototype index.html")
