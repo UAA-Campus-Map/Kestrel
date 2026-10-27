@@ -505,6 +505,21 @@ def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
 _DXF_SKIP_TYPES = {"HATCH", "SOLID", "3DFACE", "POINT", "DIMENSION", "LEADER", "MLEADER"}
 _DXF_TEXT_TYPES = {"TEXT", "MTEXT"}
 
+# Any linetype other than these is a drafting convention, not a wall on
+# this floor: HIDDEN/DASHED/OVHD for things overhead (the floor above, a
+# skybridge, a soffit), neighboring buildings, ceiling and column grids,
+# centerlines, fence lines. The JSON stores no linetype, so a dashed line
+# kept here would reach the app as a solid wall. On wall layers that
+# sealed real openings (AS121-03 alcoves drawn with a DASHED2 edge).
+# BYBLOCK is kept: inside an expanded block it means "whatever the
+# insert uses", which is almost always continuous.
+_DXF_SOLID_LINETYPES = {"CONTINUOUS", "BYBLOCK", ""}
+# Dashed lines on these layers are kept anyway: the app finds doors,
+# stairs and elevators by clustering these layers, and its portal cache
+# (buildings-config.json) must keep matching a fresh extraction.
+_DXF_KEEP_DASHED_LAYER_WORDS = ("door", "stair", "elev")
+DROP_DASHED_LINES = True
+
 
 def _iter_dxf_entities(entities, depth=0, max_depth=6):
     """Walk a layout's entities, transparently expanding INSERT (block
@@ -531,6 +546,21 @@ def _dxf_color(doc, entity):
     except Exception:
         pass
     return None
+
+
+def _dxf_is_dashed(doc, e):
+    """True when the entity draws with a non-continuous linetype (its own,
+    or its layer's when set BYLAYER) on a layer the app doesn't cluster."""
+    layer = e.dxf.layer
+    if any(w in layer.lower() for w in _DXF_KEEP_DASHED_LAYER_WORDS):
+        return False
+    linetype = e.dxf.get("linetype", "BYLAYER")
+    if linetype.upper() == "BYLAYER":
+        try:
+            linetype = doc.layers.get(layer).dxf.linetype
+        except Exception:
+            return False
+    return linetype.upper() not in _DXF_SOLID_LINETYPES
 
 
 def _dxf_item(e):
@@ -607,16 +637,18 @@ def _dxf_text(e):
     }
 
 
-def extract_dxf_layout(doc, layout, min_feature_size=MIN_FEATURE_SIZE):
+def extract_dxf_layout(doc, layout, min_feature_size=MIN_FEATURE_SIZE, drop_dashed=DROP_DASHED_LINES):
     """Return a dict of text, shapes and layout info -- the DXF counterpart
     of extract_page(). DXF entities already carry meaningful layer names and
     typed geometry (LINE/ARC/CIRCLE/...) instead of raw ink strokes, so this
-    needs far less cleanup than the PDF path; the one deliberate loss is
-    HATCH boundary detail, skipped for the same reason PDF hatching is
-    filtered -- it's fill pattern noise, not wall/room geometry."""
+    needs far less cleanup than the PDF path. Two deliberate losses: HATCH
+    boundary detail, skipped for the same reason PDF hatching is filtered --
+    it's fill pattern noise, not wall/room geometry -- and dashed-linetype
+    lines (see _DXF_SOLID_LINETYPES), which are never walls on this floor."""
     text_lines = []
     shapes = []
     dropped = 0
+    dashed = 0
     skipped_types = set()
 
     for e in _iter_dxf_entities(layout):
@@ -636,6 +668,9 @@ def extract_dxf_layout(doc, layout, min_feature_size=MIN_FEATURE_SIZE):
         bbox = [round(v, 2) for v in _item_bbox(item)]
         if _bbox_diag(bbox) < min_feature_size:
             dropped += 1
+            continue
+        if drop_dashed and _dxf_is_dashed(doc, e):
+            dashed += 1
             continue
 
         shapes.append({
@@ -665,6 +700,7 @@ def extract_dxf_layout(doc, layout, min_feature_size=MIN_FEATURE_SIZE):
         "text_line_count": len(text_lines),
         "shape_count": len(shapes),
         "shapes_filtered": dropped,
+        "shapes_dashed_dropped": dashed,
         "unsupported_entity_types": sorted(skipped_types),
         "text_lines": text_lines,
         "shapes": shapes,
@@ -724,7 +760,7 @@ def process_dxf(dxf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
         log(f"  ! could not render {dxf_path.name} to SVG ({e})")
 
     msg = (f"  {data['text_line_count']} text lines, {data['shape_count']} shapes"
-           f" ({data['shapes_filtered']} filtered as noise)")
+           f" ({data['shapes_filtered']} filtered as noise, {data['shapes_dashed_dropped']} dashed dropped)")
     if data["unsupported_entity_types"]:
         msg += f"  (skipped entity types: {', '.join(data['unsupported_entity_types'])})"
     log(msg)
