@@ -9,8 +9,9 @@
   "likely_scanned": false,
   "likely_vector_text": false,
   "text_line_count": 11,
-  "shape_count": 181,
+  "shape_count": 177,
   "shapes_filtered": 0,
+  "shapes_dashed_dropped": 4,
   "unsupported_entity_types": [],
   "text_lines": [
     {
@@ -3253,58 +3254,6 @@
       ]
     },
     {
-      "bbox": [437.01, 1928.0, 800.88, 1928.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "Hidden",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [437.01, 1928.0],
-            [800.88, 1928.0]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [443.5, 1922.0, 800.88, 1922.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "Hidden",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [443.5, 1922.0],
-            [800.88, 1922.0]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [443.5, 1873.65, 443.5, 1922.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "Hidden",
-      "items": [
-        {
-          "op": "polyline",
-          "points": [
-            [443.5, 1922.0],
-            [443.5, 1873.65]
-          ],
-          "closed": false
-        }
-      ]
-    },
-    {
       "bbox": [554.17, 1871.18, 554.5, 2057.18],
       "stroke": [0.0, 0.0, 1.0],
       "fill": null,
@@ -3424,23 +3373,6 @@
           "radius": 36.0,
           "start_angle": 90.0,
           "end_angle": 180.0
-        }
-      ]
-    },
-    {
-      "bbox": [437.01, 1873.65, 443.5, 1873.65],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "Hidden",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [443.5, 1873.65],
-            [437.01, 1873.65]
-          ]
         }
       ]
     },

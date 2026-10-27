@@ -9,8 +9,9 @@
   "likely_scanned": false,
   "likely_vector_text": false,
   "text_line_count": 5,
-  "shape_count": 109,
+  "shape_count": 104,
   "shapes_filtered": 9,
+  "shapes_dashed_dropped": 5,
   "unsupported_entity_types": [],
   "text_lines": [
     {
@@ -336,40 +337,6 @@
       ]
     },
     {
-      "bbox": [389.5, 1138.0, 461.5, 1138.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [389.5, 1138.0],
-            [461.5, 1138.0]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [389.5, 1157.0, 461.5, 1157.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [461.5, 1157.0],
-            [389.5, 1157.0]
-          ]
-        }
-      ]
-    },
-    {
       "bbox": [215.75, 1157.0, 389.5, 1157.0],
       "stroke": [0.0, 0.0, 1.0],
       "fill": null,
@@ -450,40 +417,6 @@
           "points": [
             [1001.25, 1470.67],
             [1001.25, 1146.75]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [1010.0, 1470.67, 1010.0, 1506.67],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [1010.0, 1506.67],
-            [1010.0, 1470.67]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [1001.25, 1470.67, 1001.25, 1506.67],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [1001.25, 1506.67],
-            [1001.25, 1470.67]
           ]
         }
       ]
@@ -1270,23 +1203,6 @@
           "points": [
             [999.25, 1475.55],
             [999.25, 1474.55]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [806.0, 1157.0, 806.0, 1228.0],
-      "stroke": [0.0, 0.0, 1.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "WALLS",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [806.0, 1157.0],
-            [806.0, 1228.0]
           ]
         }
       ]

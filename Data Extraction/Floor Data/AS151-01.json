@@ -9,8 +9,9 @@
   "likely_scanned": false,
   "likely_vector_text": false,
   "text_line_count": 57,
-  "shape_count": 1552,
+  "shape_count": 1543,
   "shapes_filtered": 4,
+  "shapes_dashed_dropped": 9,
   "unsupported_entity_types": [],
   "text_lines": [
     {
@@ -15037,40 +15038,6 @@
       ]
     },
     {
-      "bbox": [4.0, 292.0, 4.0, 345.25],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [4.0, 292.0],
-            [4.0, 345.25]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [34.0, 258.0, 346.0, 258.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [346.0, 258.0],
-            [34.0, 258.0]
-          ]
-        }
-      ]
-    },
-    {
       "bbox": [414.0, 1273.5, 414.0, 1280.5],
       "stroke": [0.0, 1.0, 1.0],
       "fill": null,
@@ -15602,23 +15569,6 @@
           "points": [
             [412.0, 1280.5],
             [412.0, 1273.5]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [771.16, 1603.85, 961.41, 1644.29],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [771.16, 1603.85],
-            [961.41, 1644.29]
           ]
         }
       ]
@@ -17719,23 +17669,6 @@
       ]
     },
     {
-      "bbox": [373.12, 256.0, 409.12, 256.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [409.12, 256.0],
-            [373.12, 256.0]
-          ]
-        }
-      ]
-    },
-    {
       "bbox": [373.12, 264.0, 409.12, 264.0],
       "stroke": [0.0, 1.0, 1.0],
       "fill": null,
@@ -17799,40 +17732,6 @@
           "points": [
             [373.12, 264.75],
             [373.12, 258.0]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [409.12, 256.0, 409.12, 258.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [409.12, 258.0],
-            [409.12, 256.0]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [373.12, 256.0, 373.12, 258.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [373.12, 258.0],
-            [373.12, 256.0]
           ]
         }
       ]
@@ -27894,57 +27793,6 @@
           "points": [
             [346.0, 337.75],
             [346.0, 339.25]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [2144.0, 1571.75, 2144.0, 1573.75],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [2144.0, 1571.75],
-            [2144.0, 1573.75]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [2144.0, 1138.0, 2234.0, 1138.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [2234.0, 1138.0],
-            [2144.0, 1138.0]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [2270.0, 1168.0, 2270.0, 1577.75],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "HIDDEN",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [2270.0, 1168.0],
-            [2270.0, 1577.75]
           ]
         }
       ]

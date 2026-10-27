@@ -9,8 +9,9 @@
   "likely_scanned": false,
   "likely_vector_text": false,
   "text_line_count": 24,
-  "shape_count": 529,
+  "shape_count": 527,
   "shapes_filtered": 0,
+  "shapes_dashed_dropped": 2,
   "unsupported_entity_types": [],
   "text_lines": [
     {
@@ -9207,43 +9208,6 @@
             [408.0, 534.0],
             [408.0, 618.0]
           ]
-        }
-      ]
-    },
-    {
-      "bbox": [204.0, -30.0, 204.0, 1182.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "Roof_line",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [204.0, 1182.0],
-            [204.0, -30.0]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [-30.0, -30.0, 438.0, 1182.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": true,
-      "layer": "Roof_line",
-      "items": [
-        {
-          "op": "polyline",
-          "points": [
-            [-30.0, 1182.0],
-            [438.0, 1182.0],
-            [438.0, -30.0],
-            [-30.0, -30.0]
-          ],
-          "closed": true
         }
       ]
     },

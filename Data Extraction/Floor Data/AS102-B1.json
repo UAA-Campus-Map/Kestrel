@@ -9,8 +9,9 @@
   "likely_scanned": false,
   "likely_vector_text": false,
   "text_line_count": 7,
-  "shape_count": 961,
+  "shape_count": 960,
   "shapes_filtered": 1,
+  "shapes_dashed_dropped": 1,
   "unsupported_entity_types": [],
   "text_lines": [
     {
@@ -221,25 +222,6 @@
       "width": null,
       "closed": false,
       "layer": "G_column",
-      "items": [
-        {
-          "op": "polyline",
-          "points": [
-            [1728.0, 1296.0],
-            [1728.0, 1728.0],
-            [1152.0, 1728.0]
-          ],
-          "closed": false
-        }
-      ]
-    },
-    {
-      "bbox": [1152.0, 1296.0, 1728.0, 1728.0],
-      "stroke": [1.0, 0.0, 0.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "G_Ceiling",
       "items": [
         {
           "op": "polyline",

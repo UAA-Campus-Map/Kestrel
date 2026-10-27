@@ -9,8 +9,9 @@
   "likely_scanned": false,
   "likely_vector_text": false,
   "text_line_count": 14,
-  "shape_count": 897,
+  "shape_count": 892,
   "shapes_filtered": 2,
+  "shapes_dashed_dropped": 5,
   "unsupported_entity_types": [],
   "text_lines": [
     {
@@ -8661,91 +8662,6 @@
           "points": [
             [3367.43, 3217.85],
             [3367.43, 3212.63]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [595.64, 983.89, 1072.35, 983.89],
-      "stroke": [1.0, 0.0, 1.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "fence",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [595.64, 983.89],
-            [1072.35, 983.89]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [1143.45, 984.25, 1155.98, 984.25],
-      "stroke": [1.0, 0.0, 1.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "fence",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [1143.45, 984.25],
-            [1155.98, 984.25]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [1155.98, 717.06, 1155.98, 984.25],
-      "stroke": [1.0, 0.0, 1.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "fence",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [1155.98, 984.25],
-            [1155.98, 717.06]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [589.71, 717.06, 1155.98, 717.06],
-      "stroke": [1.0, 0.0, 1.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "fence",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [1155.98, 717.06],
-            [589.71, 717.06]
-          ]
-        }
-      ]
-    },
-    {
-      "bbox": [595.64, 747.15, 595.64, 983.89],
-      "stroke": [1.0, 0.0, 1.0],
-      "fill": null,
-      "width": null,
-      "closed": false,
-      "layer": "fence",
-      "items": [
-        {
-          "op": "line",
-          "points": [
-            [595.64, 747.15],
-            [595.64, 983.89]
           ]
         }
       ]
