@@ -1,0 +1,23 @@
+{
+  "_readme": [
+    "Hand corrections to room labels, applied by floorplan_extractor.py after it reads a DXF.",
+    "Keys are floor names (<code>-<level>). Each fix is one of:",
+    "  {\"find\": {\"text\": ..., \"layer\": ...}, \"move_to_room\": \"112\"}  move a drawn label into that room, under its number",
+    "  {\"find\": {\"text\": ..., \"layer\": ...}, \"remove\": true}           drop a drawn label",
+    "  {\"add\": \"Seawolf Marketplace\", \"at_room\": \"111\"}                add a label into that room, under its number",
+    "\"layer\" in find is optional. A fix that matches nothing is reported in the log, so a re-drawn DXF can't drop it silently.",
+    "Labels are also the app's room search: a moved or added label is what \"SU Subway\" resolves to."
+  ],
+  "AS119-01": [
+    {
+      "find": {"text": "Subway", "layer": "SUBWAY_TEXT"},
+      "move_to_room": "112",
+      "note": "The DXF draws 'Subway' as title lettering outside the building (y=-200, walls end at y=-22). Subway is room 112."
+    },
+    {
+      "add": "Seawolf Marketplace",
+      "at_room": "111",
+      "note": "Room 111 is the Seawolf Marketplace; the DXF has only its number."
+    }
+  ]
+}

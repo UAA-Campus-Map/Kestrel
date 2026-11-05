@@ -722,6 +722,59 @@ def _write_dxf_svg(doc, layout, svg_path):
     svg_path.write_text(backend.get_string(page), encoding="utf-8")
 
 
+LABEL_FIXES_PATH = Path(__file__).with_name("label-fixes.json")
+# Room-name labels placed under the room number, in drawing units (inches).
+_LABEL_FIX_OFFSET = 30
+
+
+def apply_label_fixes(data, floor_name, log=print, fixes_path=LABEL_FIXES_PATH):
+    """Apply the hand corrections in label-fixes.json for this floor to
+    data["text_lines"] (move, remove or add a label). Returns how many fixes
+    applied; a fix that matches nothing is logged, not raised."""
+    if not fixes_path.exists():
+        return 0
+    fixes = json.loads(fixes_path.read_text(encoding="utf-8")).get(floor_name, [])
+    lines = data["text_lines"]
+    applied = 0
+
+    def find(spec):
+        return [t for t in lines if t["text"] == spec["text"]
+                and ("layer" not in spec or t["layer"] == spec["layer"])]
+
+    def under_room(room):
+        hits = [t for t in lines if t["text"] == room and t["layer"] != "LABEL_FIX"]
+        if len(hits) != 1:
+            log(f"  ! label fix: room '{room}' has {len(hits)} labels on {floor_name}, need exactly 1")
+            return None
+        r = hits[0]
+        return {"x": r["x"], "y": round(r["y"] - _LABEL_FIX_OFFSET, 2), "size": r["size"], "font": r["font"]}
+
+    for fix in fixes:
+        if "add" in fix:
+            pos = under_room(fix["at_room"])
+            if pos:
+                lines.append({"text": fix["add"], **pos, "layer": "LABEL_FIX"})
+                applied += 1
+            continue
+        hits = find(fix["find"])
+        if len(hits) != 1:
+            log(f"  ! label fix: {fix['find']} matches {len(hits)} labels on {floor_name}, need exactly 1")
+            continue
+        if fix.get("remove"):
+            lines.remove(hits[0])
+            applied += 1
+        elif "move_to_room" in fix:
+            pos = under_room(fix["move_to_room"])
+            if pos:
+                hits[0].update(pos, layer="LABEL_FIX")
+                applied += 1
+
+    data["text_line_count"] = len(lines)
+    if applied:
+        data["label_fixes_applied"] = applied
+    return applied
+
+
 def process_dxf(dxf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE, pretty=True, confirm_overwrite=None):
     if ezdxf is None:
         log(f"  ! ezdxf is not installed (pip install ezdxf) -- skipped {Path(dxf_path).name}")
@@ -747,6 +800,7 @@ def process_dxf(dxf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
     data["source"] = dxf_path.name
     data["page"] = 1
     data["format"] = "dxf"
+    apply_label_fixes(data, dxf_path.stem, log=log)
 
     json_path = out_dir / f"{dxf_path.stem}.json"
     json_path.write_text(_dump(data, pretty=pretty), encoding="utf-8")
