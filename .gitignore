@@ -8,3 +8,7 @@ Oropendula/
 
 # Generated georef previews (python georef.py preview <floor>)
 Data Extraction/georef/preview/
+
+# Place vote form exports (contain student emails, never commit)
+Place Votes/responses/
+Place Votes/shortlist.json

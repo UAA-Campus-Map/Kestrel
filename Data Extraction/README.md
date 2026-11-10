@@ -74,3 +74,15 @@ add-on; DXF -> JSON extraction alone doesn't need it.)
     Otherwise, use the command line with one or multiple files (PDF and DXF
     can be mixed) where -o indicates the folder you want to save the files to:
     python floorplan_extractor.py a.pdf b.dxf -o out/
+
+## Label fixes
+
+Some DXFs put a room name in the wrong spot or leave it out. For example,
+AS119-01 draws "Subway" as title lettering outside the Student Union, while
+Subway is actually room 112. Corrections go in `label-fixes.json`, keyed by
+floor name. Each one moves a drawn label into a room, removes a label, or adds
+a new label under a room number. The DXF path applies them on every
+extraction, so re-extracting never undoes them. Moved and added labels get the
+layer `LABEL_FIX`, and the JSON records `label_fixes_applied`. A fix that
+matches nothing is reported in the log. Labels double as the app's room
+search, so a label fix also changes what that name routes to.
