@@ -1,0 +1,22 @@
+{
+  "_readme": [
+    "Hand-drawn walls, added by floorplan_extractor.py after it reads a DXF.",
+    "Keys are floor names (<code>-<level>). Each fix adds one wall as a single polyline on layer \"Walls\":",
+    "  {\"add_wall\": [[x, y], [x, y], {\"arc\": {\"center\": [x, y], \"radius\": r, \"from\": deg, \"to\": deg}}, [x, y]]}",
+    "Points are DXF drawing units (inches), the same coordinates as the floor JSON. An \"arc\" step continues the line",
+    "along a circle from angle \"from\" to \"to\" (degrees, counter-clockwise from +x; to < from runs clockwise).",
+    "It is written out as short straight segments because the app skips arc items in walls.",
+    "Added walls are marked \"wall_fix\": true in the JSON, and the JSON records wall_fixes_applied."
+  ],
+  "AS119-02": [
+    {
+      "add_wall": [
+        [1138, 722],
+        [1138, 770],
+        {"arc": {"center": [1270, 770], "radius": 132, "from": 180, "to": 90}},
+        [1378, 902]
+      ],
+      "note": "Room 214 (Information Desk) is closed off from the lounge only by its curved counter (layer Counter, arcs r=126.5/138.5 around (1270, 770)), which is not a wall layer, so routes cut across the desk. This wall follows the middle of the counter. Radius 132 meets the left wall's line x=1138 at 180 deg and the top wall's line y=902 at 90 deg, so it joins the wall end at (1138, 722) and the corner at (1378, 902)."
+    }
+  ]
+}

@@ -1,13 +1,13 @@
+import ctypes
 import json
+import math
 import sys
 import threading
 import queue
 from pathlib import Path
 
-try:
-    import pymupdf as fitz  # PyMuPDF 1.24+
-except ImportError:
-    import fitz
+import pypdfium2 as pdfium
+import pypdfium2.raw as pdfium_c
 
 try:
     import ezdxf
@@ -196,27 +196,309 @@ def _dump(data, pretty=True):
 # ---------------------------------------------------------------------------
 # PDF extraction
 # ---------------------------------------------------------------------------
+#
+# PDFs are read with pypdfium2 (Apache-2.0 / BSD-3-Clause). Each page is read
+# once into a "sheet": its painted vector paths, its text characters and its
+# image boxes, all in top-left-origin page coordinates (PDF points, y down,
+# page rotation applied). Cropping to the building and writing the JSON and
+# SVG then work on that sheet, so the source PDF is never modified.
+
+
+class Rect:
+    """Axis-aligned box in sheet coordinates (x0, y0 top-left)."""
+    __slots__ = ("x0", "y0", "x1", "y1")
+
+    def __init__(self, x0, y0=None, x1=None, y1=None):
+        if y0 is None:  # Rect(other_rect) or Rect((x0, y0, x1, y1))
+            x0, y0, x1, y1 = x0
+        self.x0, self.y0, self.x1, self.y1 = x0, y0, x1, y1
+
+    def __iter__(self):
+        return iter((self.x0, self.y0, self.x1, self.y1))
+
+    def __repr__(self):
+        return f"Rect({self.x0}, {self.y0}, {self.x1}, {self.y1})"
+
+    @property
+    def width(self):
+        return self.x1 - self.x0
+
+    @property
+    def height(self):
+        return self.y1 - self.y0
+
+    @property
+    def is_empty(self):
+        return self.x1 <= self.x0 or self.y1 <= self.y0
+
+    def __or__(self, o):    # union
+        return Rect(min(self.x0, o.x0), min(self.y0, o.y0), max(self.x1, o.x1), max(self.y1, o.y1))
+
+    def __and__(self, o):   # intersection
+        return Rect(max(self.x0, o.x0), max(self.y0, o.y0), min(self.x1, o.x1), min(self.y1, o.y1))
+
+    def __add__(self, d):   # grow/shrink by (dx0, dy0, dx1, dy1)
+        return Rect(self.x0 + d[0], self.y0 + d[1], self.x1 + d[2], self.y1 + d[3])
+
+    def contains(self, o):
+        """Edge comparison rather than area overlap, so zero-width or
+        zero-height boxes (straight lines) still count as inside."""
+        return self.x0 <= o.x0 and o.x1 <= self.x1 and self.y0 <= o.y0 and o.y1 <= self.y1
+
+    def contains_point(self, x, y):
+        return self.x0 <= x <= self.x1 and self.y0 <= y <= self.y1
+
+
+def _bounds(points):
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    return Rect(min(xs), min(ys), max(xs), max(ys))
+
+
+def _mat_mul(m, n):
+    """PDF matrix product: apply m first, then n."""
+    a, b, c, d, e, f = m
+    A, B, C, D, E, F = n
+    return (a * A + b * C, a * B + b * D, c * A + d * C, c * B + d * D, e * A + f * C + E, e * B + f * D + F)
+
+
+def _mat_apply(m, x, y):
+    a, b, c, d, e, f = m
+    return a * x + c * y + e, b * x + d * y + f
+
+
+def _obj_matrix(obj):
+    m = pdfium_c.FS_MATRIX()
+    if not pdfium_c.FPDFPageObj_GetMatrix(obj, m):
+        return (1, 0, 0, 1, 0, 0)
+    return (m.a, m.b, m.c, m.d, m.e, m.f)
+
+
+def _sheet_transform(page):
+    """Map PDF user space (origin bottom-left) to sheet coordinates: origin
+    at the top-left of the visible (crop) box, y pointing down, with the
+    page's /Rotate applied, i.e. the page as a viewer shows it."""
+    left, bottom, right, top = page.get_cropbox()
+    w, h = right - left, top - bottom
+    rotation = page.get_rotation() % 360
+
+    def to_sheet(x, y):
+        u, v = x - left, top - y
+        if rotation == 90:
+            return h - v, u
+        if rotation == 180:
+            return w - u, h - v
+        if rotation == 270:
+            return v, w - u
+        return u, v
+
+    size = (h, w) if rotation in (90, 270) else (w, h)
+    return to_sheet, Rect(0, 0, *size), rotation
+
+
+def _rgb(r, g, b):
+    return (r.value / 255, g.value / 255, b.value / 255)
+
+
+def _read_path(obj, matrix, to_sheet):
+    """One painted path object -> a drawing dict, or None for paths that are
+    neither filled nor stroked (clip-only / invisible paths)."""
+    fill_mode, stroke = ctypes.c_int(0), ctypes.c_int(0)
+    if not pdfium_c.FPDFPath_GetDrawMode(obj, ctypes.byref(fill_mode), ctypes.byref(stroke)):
+        return None
+    fill_mode, stroke = fill_mode.value, bool(stroke.value)
+    if fill_mode == pdfium_c.FPDF_FILLMODE_NONE and not stroke:
+        return None
+
+    # Subpaths as lists of ("M"|"L", p) / ("C", c1, c2, p) plus a closed flag.
+    subpaths, cur, pending = [], None, []
+    x, y = ctypes.c_float(), ctypes.c_float()
+    for i in range(pdfium_c.FPDFPath_CountSegments(obj)):
+        seg = pdfium_c.FPDFPath_GetPathSegment(obj, i)
+        pdfium_c.FPDFPathSegment_GetPoint(seg, ctypes.byref(x), ctypes.byref(y))
+        p = to_sheet(*_mat_apply(matrix, x.value, y.value))
+        kind = pdfium_c.FPDFPathSegment_GetType(seg)
+        if kind == pdfium_c.FPDF_SEGMENT_MOVETO or cur is None:
+            cur = {"segments": [("M", p)], "closed": False}
+            subpaths.append(cur)
+        elif kind == pdfium_c.FPDF_SEGMENT_LINETO:
+            cur["segments"].append(("L", p))
+        elif kind == pdfium_c.FPDF_SEGMENT_BEZIERTO:
+            pending.append(p)
+            if len(pending) == 3:
+                cur["segments"].append(("C", *pending))
+                pending = []
+        if pdfium_c.FPDFPathSegment_GetClose(seg):
+            cur["closed"] = True
+    subpaths = [s for s in subpaths if len(s["segments"]) > 1]
+    if not subpaths:
+        return None
+
+    r, g, b, a = (ctypes.c_uint() for _ in range(4))
+    stroke_rgb = fill_rgb = width = None
+    if stroke and pdfium_c.FPDFPageObj_GetStrokeColor(obj, *(ctypes.byref(c) for c in (r, g, b, a))):
+        stroke_rgb = _rgb(r, g, b)
+    if fill_mode != pdfium_c.FPDF_FILLMODE_NONE and pdfium_c.FPDFPageObj_GetFillColor(obj, *(ctypes.byref(c) for c in (r, g, b, a))):
+        fill_rgb = _rgb(r, g, b)
+    if stroke:
+        w = ctypes.c_float()
+        if pdfium_c.FPDFPageObj_GetStrokeWidth(obj, ctypes.byref(w)):
+            # Width is in the path's own space; scale it like the geometry.
+            ma, mb, mc, md = matrix[:4]
+            width = w.value * abs(ma * md - mb * mc) ** 0.5
+
+    points = [p for s in subpaths for seg in s["segments"] for p in seg[1:]]
+    # Zero-length "dots" (move + line to the same point) draw nothing.
+    # Skipping them also keeps a stray dot from bridging two clusters in
+    # find_plan_area().
+    if all(p == points[0] for p in points):
+        return None
+    return {
+        "rect": _bounds(points),
+        "color": stroke_rgb,
+        "fill": fill_rgb,
+        "width": width,
+        "even_odd": fill_mode == pdfium_c.FPDF_FILLMODE_ALTERNATE,
+        "subpaths": subpaths,
+    }
+
+
+def _walk_objects(container, count_fn, get_fn, matrix, visit):
+    """Visit every page object in content order, descending into form
+    XObjects with their matrices composed, so coordinates are page space."""
+    for i in range(count_fn(container)):
+        obj = get_fn(container, i)
+        m = _mat_mul(_obj_matrix(obj), matrix)
+        if pdfium_c.FPDFPageObj_GetType(obj) == pdfium_c.FPDF_PAGEOBJ_FORM:
+            _walk_objects(obj, pdfium_c.FPDFFormObj_CountObjects, pdfium_c.FPDFFormObj_GetObject, m, visit)
+        else:
+            visit(obj, m)
+
+
+def _read_chars(page, to_sheet):
+    """Text characters with their sheet-space boxes, font, size and writing
+    direction. Spaces and line breaks (including ones pdfium infers) come
+    through as separators.
+
+    Boxes are pdfium's "loose" boxes, which span the font's full ascent to
+    descent like a text line does, rather than hugging each glyph."""
+    textpage = page.get_textpage()
+    chars = []
+    box = pdfium_c.FS_RECTF()
+    ox, oy = ctypes.c_double(), ctypes.c_double()
+    for i in range(textpage.count_chars()):
+        ch = chr(pdfium_c.FPDFText_GetUnicode(textpage, i))
+        if ch in "\r\n\x02":
+            chars.append({"break": True})
+            continue
+        if ch.isspace():
+            chars.append({"space": True})
+            continue
+        pdfium_c.FPDFText_GetLooseCharBox(textpage, i, ctypes.byref(box))
+        rect = _bounds([to_sheet(box.left, box.bottom), to_sheet(box.right, box.top)])
+
+        # Unit vector along the baseline, in sheet space (so it includes the
+        # page rotation). Lines are grouped along this, which keeps vertical
+        # labels and rotated pages reading as whole words.
+        angle = pdfium_c.FPDFText_GetCharAngle(textpage, i)
+        angle = 0.0 if angle < 0 else angle
+        pdfium_c.FPDFText_GetCharOrigin(textpage, i, ctypes.byref(ox), ctypes.byref(oy))
+        x0, y0 = to_sheet(ox.value, oy.value)
+        x1, y1 = to_sheet(ox.value + math.cos(angle), oy.value - math.sin(angle))  # pdfium angles run clockwise
+        chars.append({
+            "text": ch,
+            "rect": rect,
+            "dir": (round(x1 - x0, 3), round(y1 - y0, 3)),
+            "size": pdfium_c.FPDFText_GetFontSize(textpage, i),
+            "font": _font_name(textpage, i),
+        })
+    textpage.close()
+    return chars
+
+
+def _font_name(textpage, i):
+    flags = ctypes.c_int()
+    n = pdfium_c.FPDFText_GetFontInfo(textpage, i, None, 0, ctypes.byref(flags))
+    if n <= 0:
+        return ""
+    buf = ctypes.create_string_buffer(n)
+    pdfium_c.FPDFText_GetFontInfo(textpage, i, buf, n, ctypes.byref(flags))
+    name = buf.value.decode("utf-8", errors="replace")
+    # Embedded subset fonts are named like "ABCDEF+Arial"; drop the tag.
+    return name.split("+", 1)[1] if len(name) > 7 and name[6] == "+" else name
+
+
+def read_sheet(page):
+    """Read one pypdfium2 page into a sheet dict (see the section comment)."""
+    to_sheet, rect, rotation = _sheet_transform(page)
+    drawings, images = [], []
+
+    def visit(obj, matrix):
+        kind = pdfium_c.FPDFPageObj_GetType(obj)
+        if kind == pdfium_c.FPDF_PAGEOBJ_PATH:
+            d = _read_path(obj, matrix, to_sheet)
+            if d is not None:
+                drawings.append(d)
+        elif kind == pdfium_c.FPDF_PAGEOBJ_IMAGE:
+            # An image fills the unit square of its own matrix.
+            images.append(_bounds([to_sheet(*_mat_apply(matrix, u, v)) for u in (0, 1) for v in (0, 1)]))
+
+    _walk_objects(page, pdfium_c.FPDFPage_CountObjects, pdfium_c.FPDFPage_GetObject, (1, 0, 0, 1, 0, 0), visit)
+    return {"rect": rect, "rotation": rotation, "drawings": drawings,
+            "chars": _read_chars(page, to_sheet), "images": images}
+
+
+def _is_rect(sub):
+    """A closed 4-corner axis-aligned subpath, i.e. what the PDF 're'
+    operator draws (pdfium stores it as move + 3 or 4 lines + close)."""
+    segs = sub["segments"]
+    if any(s[0] == "C" for s in segs):
+        return False
+    pts = [s[1] for s in segs]
+    if len(pts) == 5 and pts[4] == pts[0]:
+        pts = pts[:4]
+    if len(pts) != 4 or not (sub["closed"] or len(segs) == 5):
+        return False
+    edges = list(zip(pts, pts[1:] + pts[:1]))
+    return all((a[0] == b[0]) != (a[1] == b[1]) for a, b in edges)
+
+
+def _path_items(d):
+    """Drawing commands for the JSON, as ("l", p1, p2), ("c", p1, c1, c2, p2)
+    and ("re", Rect) tuples in drawing order."""
+    items = []
+    for sub in d["subpaths"]:
+        if _is_rect(sub):
+            items.append(("re", _bounds([s[1] for s in sub["segments"]])))
+            continue
+        start = prev = sub["segments"][0][1]
+        for seg in sub["segments"][1:]:
+            if seg[0] == "L":
+                items.append(("l", prev, seg[1]))
+            else:
+                items.append(("c", prev, seg[1], seg[2], seg[3]))
+            prev = seg[-1]
+        if sub["closed"] and prev != start:
+            items.append(("l", prev, start))
+    return items
+
 
 def _serialize_path_item(item):
-    """Turn one PyMuPDF drawing command into plain JSON."""
+    """Turn one drawing command into plain JSON."""
     op = item[0]
     if op == "l":   # line: p1, p2
-        return {"op": "line", "points": [_pt(item[1].x, item[1].y), _pt(item[2].x, item[2].y)]}
+        return {"op": "line", "points": [_pt(*item[1]), _pt(*item[2])]}
     if op == "c":   # cubic bezier: p1, ctrl1, ctrl2, p2
-        return {"op": "curve", "points": [_pt(p.x, p.y) for p in item[1:5]]}
+        return {"op": "curve", "points": [_pt(*p) for p in item[1:5]]}
     if op == "re":  # rectangle
-        r = item[1]
-        return {"op": "rect", "rect": [round(v, 2) for v in (r.x0, r.y0, r.x1, r.y1)]}
-    if op == "qu":  # quad
-        q = item[1]
-        return {"op": "quad", "points": [_pt(q.ul.x, q.ul.y), _pt(q.ur.x, q.ur.y), _pt(q.lr.x, q.lr.y), _pt(q.ll.x, q.ll.y)]}
+        return {"op": "rect", "rect": [round(v, 2) for v in item[1]]}
     return {"op": op}
 
 
 def _merge_path_items(items):
     """Collapse chains of connected line segments into single polylines and
     drop zero-length lines. Architectural PDFs draw hatching and dash
-    patterns as hundreds of tiny 'l' commands; this cuts that down to one
+    patterns as hundreds of tiny line commands; this cuts that down to one
     entry per continuous stroke without losing any geometry."""
     merged = []
     poly = None
@@ -226,7 +508,7 @@ def _merge_path_items(items):
             p1, p2 = item[1], item[2]
             if p1 == p2:
                 continue
-            a, b = _pt(p1.x, p1.y), _pt(p2.x, p2.y)
+            a, b = _pt(*p1), _pt(*p2)
             if poly and poly[-1] == a:
                 poly.append(b)
             else:
@@ -247,6 +529,57 @@ def _color(c):
     return [round(v, 3) for v in c] if c else None
 
 
+def _char_span(c):
+    """(start, end) of a character along its writing direction and the
+    (centre, height) across it, from its box's corners."""
+    r, (dx, dy) = c["rect"], c["dir"]
+    corners = [(r.x0, r.y0), (r.x1, r.y0), (r.x0, r.y1), (r.x1, r.y1)]
+    along = [x * dx + y * dy for x, y in corners]
+    across = [y * dx - x * dy for x, y in corners]
+    return min(along), max(along), (min(across) + max(across)) / 2, max(across) - min(across)
+
+
+def _text_lines(chars):
+    """Group characters into lines: a new line starts at a line break, when
+    the writing direction changes, when the baseline moves, or when the gap
+    to the next character is wider than a few character heights (two room
+    labels side by side are two lines)."""
+    lines, cur, gap_pending = [], None, False
+    for c in chars:
+        if c.get("break"):
+            cur = None
+            continue
+        if c.get("space"):
+            gap_pending = True
+            continue
+        a0, a1, mid, h = _char_span(c)
+        h = max(h, c["size"] * 0.5, 0.1)
+        if cur is not None:
+            last = cur["chars"][-1]
+            l0, l1, lmid, _ = _char_span(last)
+            if (c["dir"] != last["dir"] or abs(mid - lmid) > h * 0.5
+                    or a0 - l1 > h * 3 or a1 < l0):
+                cur = None
+        if cur is None:
+            cur = {"chars": [], "text": ""}
+            lines.append(cur)
+        elif gap_pending:
+            cur["text"] += " "
+        cur["chars"].append(c)
+        cur["text"] += c["text"]
+        gap_pending = False
+
+    out = []
+    for line in lines:
+        rect = Rect(line["chars"][0]["rect"])
+        for c in line["chars"][1:]:
+            rect = rect | c["rect"]
+        first = line["chars"][0]
+        out.append({"text": " ".join(line["text"].split()), "rect": rect,
+                    "size": first["size"], "font": first["font"]})
+    return out
+
+
 # Shapes closer than this (in points) are treated as part of the same
 # drawing when separating the building from the sheet's other annotations.
 _GROUP_GAP = 10
@@ -254,23 +587,24 @@ _GROUP_GAP = 10
 _PLAN_MARGIN = 6
 
 
-def _find_sheet_frame(page, drawings):
+def _find_sheet_frame(sheet):
     """UAA sheets draw everything except the title block inside a thin
     stroked frame: the smallest stroked rectangle covering most of the page.
     If a sheet puts its title block inside the frame instead, it's split off
     by a full-width horizontal rule in the lower part -- cut there. Returns
     None if the sheet has no frame."""
-    pr = page.rect
+    pr = sheet["rect"]
+    drawings = sheet["drawings"]
     frames = [
         d["rect"] for d in drawings
-        if d.get("color") is not None
+        if d["color"] is not None
         and d["rect"].width >= pr.width * 0.7
         and d["rect"].height >= pr.height * 0.5
-        and any(item[0] in ("re", "qu") for item in d["items"])
+        and any(_is_rect(s) for s in d["subpaths"])
     ]
     if not frames:
         return None
-    frame = fitz.Rect(min(frames, key=lambda r: r.width * r.height))
+    frame = Rect(min(frames, key=lambda r: r.width * r.height))
 
     rules = [
         d["rect"] for d in drawings
@@ -313,11 +647,11 @@ def _largest_group(rects, gap=_GROUP_GAP, cell=50):
     groups = {}
     for i, r in enumerate(rects):
         g = root(i)
-        groups[g] = groups[g] | r if g in groups else fitz.Rect(r)
+        groups[g] = groups[g] | r if g in groups else Rect(r)
     return max(groups.values(), key=lambda r: r.width * r.height, default=None)
 
 
-def find_plan_area(page):
+def find_plan_area(sheet):
     """Return the part of the sheet that holds just the building, or None if
     no sheet frame is found.
 
@@ -325,21 +659,14 @@ def find_plan_area(page):
     north arrow sit off to the side. Those are separate clusters of shapes,
     while the building's walls, doors and room labels all sit close together,
     so the building is the largest cluster inside the frame."""
-    drawings = page.get_drawings()
-    frame = _find_sheet_frame(page, drawings)
+    frame = _find_sheet_frame(sheet)
     if frame is None:
         return None
 
-    rects = [d["rect"] for d in drawings]
-    for block in page.get_text("dict")["blocks"]:
-        rects += [fitz.Rect(line["bbox"]) for line in block.get("lines", [])]
-    # Edge comparisons rather than `in`, since zero-height/width lines have
-    # an empty Rect. Frame-wide lines are the frame itself or its rules.
-    rects = [
-        r for r in rects
-        if frame.x0 <= r.x0 and r.x1 <= frame.x1 and frame.y0 <= r.y0 and r.y1 <= frame.y1
-        and r.width < frame.width * 0.9
-    ]
+    rects = [d["rect"] for d in sheet["drawings"]]
+    rects += [line["rect"] for line in _text_lines(sheet["chars"])]
+    # Frame-wide lines are the frame itself or its rules.
+    rects = [r for r in rects if frame.contains(r) and r.width < frame.width * 0.9]
 
     building = _largest_group(rects)
     if building is None:
@@ -347,87 +674,83 @@ def find_plan_area(page):
     return (building + (-_PLAN_MARGIN, -_PLAN_MARGIN, _PLAN_MARGIN, _PLAN_MARGIN)) & frame
 
 
-def crop_to_plan_area(page):
-    """Strip everything outside the building (title block, sheet border,
-    crop marks, scale bar, north arrow) from the page and crop the page to that area, so
-    both the SVG and the extracted JSON only cover the plan. Coordinates
-    after this are relative to the top-left of the plan area. Returns the
-    area in original page coordinates, or None if the page was left as-is."""
-    area = find_plan_area(page)
-    if area is None:
-        return None
+def crop_sheet(sheet, area):
+    """Keep only what lies inside `area` (in sheet coordinates) and shift it
+    so `area`'s top-left corner becomes the origin. Paths and images that
+    cross the edge are dropped whole and characters are kept by their
+    centre, which strips the title block, sheet border, crop marks, scale bar
+    and north arrow along with everything else outside the building."""
+    dx, dy = -area.x0, -area.y0
 
-    pr = page.rect
-    outside = [
-        fitz.Rect(pr.x0, pr.y0, pr.x1, area.y0),   # above
-        fitz.Rect(pr.x0, area.y1, pr.x1, pr.y1),   # below (title block)
-        fitz.Rect(pr.x0, pr.y0, area.x0, pr.y1),   # left
-        fitz.Rect(area.x1, pr.y0, pr.x1, pr.y1),   # right
-    ]
-    for r in outside:
-        if not r.is_empty:
-            page.add_redact_annot(r, fill=False)
-    # Removes most of the surrounding vector art and text from the output
-    # (not just hiding it). A few degenerate zero-height paths slip through
-    # redaction; the cropbox below clips those out of the SVG, and
-    # extract_page() filters them out of the JSON.
-    page.apply_redactions(
-        images=fitz.PDF_REDACT_IMAGE_REMOVE,
-        graphics=fitz.PDF_REDACT_LINE_ART_REMOVE_IF_TOUCHED,
-        text=fitz.PDF_REDACT_TEXT_REMOVE,
-    )
-    page.set_cropbox(area)
-    return area
+    def shift(p):
+        return (p[0] + dx, p[1] + dy)
+
+    def shift_rect(r):
+        return Rect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy)
+
+    drawings = []
+    for d in sheet["drawings"]:
+        if not area.contains(d["rect"]):
+            continue
+        subpaths = [{"segments": [(s[0], *map(shift, s[1:])) for s in sub["segments"]], "closed": sub["closed"]}
+                    for sub in d["subpaths"]]
+        drawings.append({**d, "rect": shift_rect(d["rect"]), "subpaths": subpaths})
+
+    chars = []
+    for c in sheet["chars"]:
+        if "rect" in c:
+            r = c["rect"]
+            if not area.contains_point((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2):
+                continue
+            c = {**c, "rect": shift_rect(r)}
+        chars.append(c)
+
+    return {**sheet, "rect": Rect(0, 0, area.width, area.height), "drawings": drawings, "chars": chars,
+            "images": [shift_rect(r) for r in sheet["images"] if area.contains(r)]}
 
 
-def extract_page(page, min_feature_size=MIN_FEATURE_SIZE):
-    """Return a dict of text, shapes and page info for one PDF page."""
-    visible = page.rect
+def extract_page(sheet, min_feature_size=MIN_FEATURE_SIZE):
+    """Return a dict of text, shapes and page info for one (cropped) sheet."""
+    visible = sheet["rect"]
     text_lines = []
-    for block in page.get_text("dict")["blocks"]:
-        for line in block.get("lines", []):
-            text = " ".join(s["text"].strip() for s in line["spans"] if s["text"].strip())
-            if not text:
-                continue
-            x0, y0, x1, y1 = line["bbox"]
-            if not fitz.Rect(line["bbox"]).intersects(visible):
-                continue
-            text_lines.append({
-                "text": text,
-                "x": round((x0 + x1) / 2, 2),
-                "y": round((y0 + y1) / 2, 2),
-                "bbox": [round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2)],
-                "size": round(line["spans"][0]["size"], 2),
-                "font": line["spans"][0]["font"],
-            })
+    for line in _text_lines(sheet["chars"]):
+        x0, y0, x1, y1 = line["rect"]
+        text_lines.append({
+            "text": line["text"],
+            "x": round((x0 + x1) / 2, 2),
+            "y": round((y0 + y1) / 2, 2),
+            "bbox": [round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2)],
+            "size": round(line["size"], 2),
+            "font": line["font"],
+        })
 
     # Vector paths: walls, room outlines, symbols, hatching, etc.
     shapes = []
     dropped = 0
-    for d in page.get_drawings():
+    for d in sheet["drawings"]:
         r = d["rect"]
-        # Zero-height/width lines have an empty Rect, which never
-        # "intersects" anything, so compare the edges directly.
         if r.x1 < visible.x0 or r.x0 > visible.x1 or r.y1 < visible.y0 or r.y0 > visible.y1:
             continue
-        bbox = [round(v, 2) for v in (r.x0, r.y0, r.x1, r.y1)]
-        has_fill = bool(d.get("fill"))
-        if not has_fill and _bbox_diag(bbox) < min_feature_size:
+        bbox = [round(v, 2) for v in r]
+        if d["fill"] is None and _bbox_diag(bbox) < min_feature_size:
             dropped += 1
             continue
         shapes.append({
             "bbox": bbox,
-            "stroke": _color(d.get("color")),
-            "fill": _color(d.get("fill")),
-            "width": round(d["width"], 3) if d.get("width") is not None else None,
-            "closed": d.get("closePath", False),
-            "layer": d.get("layer") or None,   # CAD-exported PDFs sometimes keep layer names
-            "items": _merge_path_items(d["items"]),
+            "stroke": _color(d["color"]),
+            "fill": _color(d["fill"]),
+            "width": round(d["width"], 3) if d["width"] is not None else None,
+            # Kept for format compatibility: a closed outline's closing edge
+            # is written out as a final line instead, so this is False for
+            # stroked shapes and None (not applicable) for fill-only ones.
+            "closed": False if d["color"] is not None else None,
+            # pdfium doesn't expose optional-content (layer) names.
+            "layer": None,
+            "items": _merge_path_items(_path_items(d)),
         })
 
-    images = page.get_images()
     has_text = bool(text_lines)
-    likely_scanned = not has_text and len(images) > 0
+    likely_scanned = not has_text and len(sheet["images"]) > 0
     # A page with no text layer but very dense line-work usually means labels
     # were exported as outlined vector glyphs rather than real text (common
     # with AutoCAD "print to PDF"). likely_scanned misses this case since
@@ -435,8 +758,8 @@ def extract_page(page, min_feature_size=MIN_FEATURE_SIZE):
     likely_vector_text = not has_text and len(shapes) > 800
 
     return {
-        "page_size": [round(page.rect.width, 2), round(page.rect.height, 2)],
-        "rotation": page.rotation,
+        "page_size": [round(visible.width, 2), round(visible.height, 2)],
+        "rotation": sheet["rotation"],
         "likely_scanned": likely_scanned,
         "likely_vector_text": likely_vector_text,
         "text_line_count": len(text_lines),
@@ -445,6 +768,45 @@ def extract_page(page, min_feature_size=MIN_FEATURE_SIZE):
         "text_lines": text_lines,
         "shapes": shapes,
     }
+
+
+def _svg_num(v):
+    return f"{v:.2f}".rstrip("0").rstrip(".")
+
+
+def _svg_color(c):
+    return "#{:02x}{:02x}{:02x}".format(*(round(v * 255) for v in c))
+
+
+def sheet_to_svg(sheet):
+    """Vector SVG of the sheet: every painted path (noise included, so it
+    looks like the PDF) and the text layer as real <text> elements."""
+    from xml.sax.saxutils import escape
+
+    w, h = sheet["rect"].width, sheet["rect"].height
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{_svg_num(w)}pt" height="{_svg_num(h)}pt" '
+           f'viewBox="0 0 {_svg_num(w)} {_svg_num(h)}">']
+    for d in sheet["drawings"]:
+        parts = []
+        for sub in d["subpaths"]:
+            for seg in sub["segments"]:
+                parts.append(seg[0] + " ".join(f"{_svg_num(p[0])} {_svg_num(p[1])}" for p in seg[1:]))
+            if sub["closed"]:
+                parts.append("Z")
+        attrs = [f'd="{"".join(parts)}"']
+        attrs.append(f'fill="{_svg_color(d["fill"])}"' if d["fill"] else 'fill="none"')
+        if d["fill"] and d["even_odd"]:
+            attrs.append('fill-rule="evenodd"')
+        if d["color"]:
+            attrs.append(f'stroke="{_svg_color(d["color"])}" stroke-width="{_svg_num(max(d["width"] or 0, 0.01))}"')
+        out.append(f'<path {" ".join(attrs)}/>')
+    for line in _text_lines(sheet["chars"]):
+        r = line["rect"]
+        out.append(f'<text x="{_svg_num(r.x0)}" y="{_svg_num(r.y1)}" font-size="{_svg_num(line["size"])}" '
+                   f'font-family="{escape(line["font"] or "sans-serif", {chr(34): "&quot;"})}">'
+                   f'{escape(line["text"])}</text>')
+    out.append("</svg>")
+    return "\n".join(out)
 
 
 def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE, pretty=True, confirm_overwrite=None):
@@ -457,15 +819,23 @@ def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
         log(f"  - {pdf_path.name}: skipped, existing output kept")
         return written
 
-    with fitz.open(pdf_path) as doc:
-        if doc.needs_pass:
+    try:
+        doc = pdfium.PdfDocument(pdf_path)
+    except pdfium.PdfiumError as e:
+        if getattr(e, "err_code", None) == pdfium_c.FPDF_ERR_PASSWORD:
             log(f"  ! {pdf_path.name} is password protected, skipped")
             return written
+        raise
 
+    try:
         for i, page in enumerate(doc, start=1):
             stem = f"{pdf_path.stem}-p{i}"
-            plan_area = crop_to_plan_area(page)
-            data = {**building_info(pdf_path.stem), **extract_page(page, min_feature_size=min_feature_size)}
+            sheet = read_sheet(page)
+            page.close()
+            plan_area = find_plan_area(sheet)
+            if plan_area is not None:
+                sheet = crop_sheet(sheet, plan_area)
+            data = {**building_info(pdf_path.stem), **extract_page(sheet, min_feature_size=min_feature_size)}
             # Where the cropped plan sits on the original sheet, so JSON/SVG
             # coordinates can be mapped back to the PDF if ever needed.
             data["plan_area"] = [round(v, 2) for v in plan_area] if plan_area else None
@@ -477,7 +847,7 @@ def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
             json_path.write_text(_dump(data, pretty=pretty), encoding="utf-8")
 
             svg_path = out_dir / f"{stem}.svg"
-            svg_path.write_text(page.get_svg_image(text_as_path=False), encoding="utf-8")
+            svg_path.write_text(sheet_to_svg(sheet), encoding="utf-8")
 
             written += [json_path, svg_path]
             msg = (f"  page {i}: {data['text_line_count']} text lines, {data['shape_count']} shapes"
@@ -489,6 +859,8 @@ def process_pdf(pdf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
             elif data["likely_vector_text"]:
                 msg += "  (labels look like outlined vector glyphs, not a real text layer)"
             log(msg)
+    finally:
+        doc.close()
 
     return written
 
@@ -775,6 +1147,66 @@ def apply_label_fixes(data, floor_name, log=print, fixes_path=LABEL_FIXES_PATH):
     return applied
 
 
+WALL_FIXES_PATH = Path(__file__).with_name("wall-fixes.json")
+# Largest angle covered by one straight piece of an arc step. 3 degrees
+# keeps a 132-inch radius within 0.05 inch of the true curve.
+_WALL_FIX_ARC_STEP = 3.0
+
+
+def _wall_fix_points(steps):
+    """Expand an add_wall list ([x, y] points and {"arc": ...} steps) into
+    plain points."""
+    points = []
+    for step in steps:
+        if isinstance(step, dict):
+            arc = step["arc"]
+            (cx, cy), r = arc["center"], arc["radius"]
+            a0, a1 = arc["from"], arc["to"]
+            n = max(1, math.ceil(abs(a1 - a0) / _WALL_FIX_ARC_STEP))
+            for k in range(n + 1):
+                a = math.radians(a0 + (a1 - a0) * k / n)
+                points.append([cx + r * math.cos(a), cy + r * math.sin(a)])
+        else:
+            points.append([float(step[0]), float(step[1])])
+    # Drop repeats where an arc starts on the point before it.
+    out = []
+    for p in points:
+        p = _pt(*p)
+        if not out or out[-1] != p:
+            out.append(p)
+    return out
+
+
+def apply_wall_fixes(data, floor_name, log=print, fixes_path=WALL_FIXES_PATH):
+    """Add the hand-drawn walls in wall-fixes.json for this floor to
+    data["shapes"]. Returns how many were added."""
+    if not fixes_path.exists():
+        return 0
+    fixes = json.loads(fixes_path.read_text(encoding="utf-8")).get(floor_name, [])
+    applied = 0
+    for fix in fixes:
+        points = _wall_fix_points(fix["add_wall"])
+        if len(points) < 2:
+            log(f"  ! wall fix on {floor_name} has fewer than 2 points, skipped")
+            continue
+        xs, ys = [p[0] for p in points], [p[1] for p in points]
+        data["shapes"].append({
+            "bbox": [min(xs), min(ys), max(xs), max(ys)],
+            "stroke": [0.0, 0.0, 1.0],
+            "fill": None,
+            "width": None,
+            "closed": False,
+            "layer": "Walls",
+            "wall_fix": True,
+            "items": [{"op": "polyline", "points": points, "closed": False}],
+        })
+        applied += 1
+    data["shape_count"] = len(data["shapes"])
+    if applied:
+        data["wall_fixes_applied"] = applied
+    return applied
+
+
 def process_dxf(dxf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE, pretty=True, confirm_overwrite=None):
     if ezdxf is None:
         log(f"  ! ezdxf is not installed (pip install ezdxf) -- skipped {Path(dxf_path).name}")
@@ -801,6 +1233,7 @@ def process_dxf(dxf_path, out_dir, log=print, min_feature_size=MIN_FEATURE_SIZE,
     data["page"] = 1
     data["format"] = "dxf"
     apply_label_fixes(data, dxf_path.stem, log=log)
+    apply_wall_fixes(data, dxf_path.stem, log=log)
 
     json_path = out_dir / f"{dxf_path.stem}.json"
     json_path.write_text(_dump(data, pretty=pretty), encoding="utf-8")
