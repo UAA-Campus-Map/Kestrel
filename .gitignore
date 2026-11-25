@@ -12,3 +12,6 @@ Data Extraction/georef/preview/
 # Place vote form exports (contain student emails, never commit)
 Place Votes/responses/
 Place Votes/shortlist.json
+
+# Personal weekly contribution reports
+Weekly-Reports.md

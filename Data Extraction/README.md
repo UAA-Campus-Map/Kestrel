@@ -2,7 +2,7 @@
 # Floor plan extractor
 
 To use it pick one or more floor plan PDFs or DXFs in a Tkinter window, choose an
-output folder, and each file is run through PyMuPDF (fitz) for PDF or ezdxf for
+output folder, and each file is run through pypdfium2 for PDF or ezdxf for
 DXF. For every page/layout you get:
 
     <name>-p<N>.svg    rendered floor plan for the React app   (PDF: one per page)
@@ -39,7 +39,9 @@ removed: the title block (UAA Facilities logo, building name, dates, sheet
 number), the sheet border, crop marks, the scale bar and the north arrow.
 Check the original PDFs for those. The building is found as the largest
 group of nearby shapes inside the sheet's frame, and the page is cropped to
-it with a small margin. That means SVG and JSON coordinates start at the
+it with a small margin. Shapes that cross the crop edge are dropped whole and
+text is kept by each character's centre; the source PDF is never modified.
+That means SVG and JSON coordinates start at the
 top-left corner of the building, not the top-left of the sheet. `plan_area`
 in the JSON gives the crop's position on the original sheet, so you can map
 coordinates back if you need to. If a sheet has no frame, it's exported
@@ -61,10 +63,16 @@ own `confirm_overwrite(paths) -> bool` callback.
 
 ## Requirements
 
-    pip install pymupdf ezdxf pillow
+    pip install pypdfium2 ezdxf pillow
 
 (`pillow` is only needed for DXF -> SVG preview rendering via ezdxf's drawing
 add-on; DXF -> JSON extraction alone doesn't need it.)
+
+pypdfium2 (Apache-2.0 / BSD-3-Clause) replaced PyMuPDF, whose AGPL-3.0
+license would have forced this tool to be AGPL too. pdfium has no PDF -> SVG
+export, so the PDF SVG is written by the extractor from the same paths and
+text it puts in the JSON. pdfium also doesn't expose PDF layer (optional
+content) names, so a PDF shape's `layer` is always null.
 
 ## Usage
 
@@ -86,3 +94,19 @@ extraction, so re-extracting never undoes them. Moved and added labels get the
 layer `LABEL_FIX`, and the JSON records `label_fixes_applied`. A fix that
 matches nothing is reported in the log. Labels double as the app's room
 search, so a label fix also changes what that name routes to.
+
+## Wall fixes
+
+Some walls aren't drawn on a wall layer at all. For example, AS119-02 (Student
+Union floor 2) closes off room 214, the Information Desk, only with its curved
+counter (layer `Counter`), so the app treated the desk as open floor and
+routes cut across it. Hand-drawn walls go in `wall-fixes.json`, keyed by floor
+name. Each one is a single polyline of DXF points, and an `arc` step follows a
+circle (written out as short straight segments, since the app skips arc items
+in walls). The DXF path adds them on every extraction as layer `Walls` shapes
+marked `"wall_fix": true`, and the JSON records `wall_fixes_applied`. They are
+added to the JSON only; the SVG preview is still a plain render of the DXF.
+
+After changing a wall fix, copy the floor JSON into `Oropendula/src/` and
+rebuild that building's `.nvg.gz` with the walkable mask (the import tool's
+Deploy section), since routing uses the cached graph.
